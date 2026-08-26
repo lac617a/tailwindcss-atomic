@@ -1,0 +1,20 @@
+{
+  "name": "tailwind-atomic-wasm",
+  "version": "1.0.6",
+  "main": "./js/index.js",
+  "exports": {
+    ".": "./js/index.js",
+    "./next": "./js/next.js",
+    "./esbuild": "./js/esbuild.js"
+  },
+  "files": [
+    "pkg",
+    "js"
+  ],
+  "dependencies": {
+    "unplugin": "^1.10.0",
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/generator": "^7.24.0"
+  }
+}

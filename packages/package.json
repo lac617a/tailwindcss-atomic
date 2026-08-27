@@ -2,6 +2,7 @@
 	"name": "tailwindcss-atomic",
 	"version": "1.0.14",
 	"type": "module",
+	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup and next.js!",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
@@ -84,6 +85,14 @@
 		"registry": "https://registry.npmjs.org/",
 		"main": "./dist/index.cjs",
 		"module": "./dist/index.mjs"
+	},
+	"typesVersions": {
+		"*": {
+			"*": [
+				"./dist/*",
+				"./dist/index.d.ts"
+			]
+		}
 	},
 	"engines": {
 		"node": ">=22.18.0"

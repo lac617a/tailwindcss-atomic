@@ -5,7 +5,7 @@
 	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup and next.js!",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
+	"types": "./dist/index.d.mts",
 	"scripts": {
 		"dev": "tsdown --watch --sourcemap",
 		"build": "tsdown"
@@ -20,32 +20,57 @@
 	],
 	"exports": {
 		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.cjs"
+			"import": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
 		},
 		"./next": {
-			"types": "./dist/next.d.ts",
-			"import": "./dist/next.mjs",
-			"require": "./dist/next.cjs"
+			"import": {
+				"types": "./dist/next.d.mts",
+				"default": "./dist/next.mjs"
+			},
+			"require": {
+				"types": "./dist/next.d.cts",
+				"default": "./dist/next.cjs"
+			}
 		},
 		"./vite": {
-			"types": "./dist/vite.d.ts",
-			"import": "./dist/vite.js",
-			"default": "./dist/vite.js"
+			"import": {
+				"types": "./dist/vite.d.mts",
+				"default": "./dist/vite.mjs"
+			},
+			"require": {
+				"types": "./dist/vite.d.cts",
+				"default": "./dist/vite.cjs"
+			}
 		},
 		"./webpack": {
-			"types": "./dist/webpack.d.ts",
-			"import": "./dist/webpack.js",
-			"default": "./dist/webpack.js"
+			"import": {
+				"types": "./dist/webpack.d.mts",
+				"default": "./dist/webpack.mjs"
+			},
+			"require": {
+				"types": "./dist/webpack.d.cts",
+				"default": "./dist/webpack.cjs"
+			}
 		},
 		"./rollup": {
-			"types": "./dist/rollup.d.ts",
-			"import": "./dist/rollup.js",
-			"default": "./dist/rollup.js"
+			"import": {
+				"types": "./dist/rollup.d.mts",
+				"default": "./dist/rollup.mjs"
+			},
+			"require": {
+				"types": "./dist/rollup.d.cts",
+				"default": "./dist/rollup.cjs"
+			}
 		},
 		"./postcss": {
-			"types": "./dist/postcss.d.ts",
+			"types": "./dist/postcss.d.mts",
 			"import": "./dist/postcss.mjs",
 			"require": "./postcss.cjs"
 		},
@@ -90,7 +115,7 @@
 		"*": {
 			"*": [
 				"./dist/*",
-				"./dist/index.d.ts"
+				"./dist/index.d.mts"
 			]
 		}
 	},

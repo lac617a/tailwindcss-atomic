@@ -33,7 +33,7 @@ function resolveWebpackLoaderPath() {
 		typeof __dirname === "string"
 			? __dirname
 			: path.dirname(fileURLToPath(import.meta.url));
-	return path.resolve(dir, "..", "loader.js");
+	return path.resolve(dir, "loader.cjs");
 }
 
 export {getCalleeName, resolveWebpackLoaderPath};

@@ -156,7 +156,7 @@ const factory: UnpluginFactory<{
 							const already = module.loaders.some(
 								(loader) =>
 									typeof loader.loader === "string" &&
-									loader.loader.includes("webpack-loader.cjs"),
+									loader.loader.includes("loader.cjs"),
 							);
 							if (already) return;
 

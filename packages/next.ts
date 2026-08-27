@@ -18,9 +18,9 @@ type NextConfig = {
 
 function resolveAtomicLoader() {
 	try {
-		return req.resolve("../loader.js");
+		return req.resolve("./loader.cjs");
 	} catch {
-		return req.resolve("../../loader.js");
+		return req.resolve("../dist/loader.cjs");
 	}
 }
 

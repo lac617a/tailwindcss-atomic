@@ -290,8 +290,20 @@ async function runWarmup() {
 		dirname,
 		parse,
 	);
+	const source = readFileSync(cssPath, "utf8");
 	const appRequire = createRequire(join(pkgDir, "package.json"));
 	const plugins = [];
+	try {
+		const loadConfig = appRequire("postcss-load-config");
+		const loaded = await loadConfig({}, pkgDir);
+		if (Array.isArray(loaded?.plugins) && loaded.plugins.length) {
+			await postcss(loaded.plugins).process(source, {from: cssPath});
+			return;
+		}
+	} catch {
+		// El app puede no tener postcss-load-config; armamos el pipeline a mano.
+	}
+
 	try {
 		const tw = appRequire("@tailwindcss/postcss");
 		plugins.push(tw.default || tw);
@@ -303,8 +315,13 @@ async function runWarmup() {
 		}
 	}
 
+	try {
+		plugins.push(appRequire("autoprefixer"));
+	} catch {
+		// Tailwind v4 no lo necesita.
+	}
+
 	plugins.push(postcssTailwindAtomic());
-	const source = readFileSync(cssPath, "utf8");
 	await postcss(plugins).process(source, {from: cssPath});
 }
 

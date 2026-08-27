@@ -4,5 +4,11 @@ import tailwindAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
 	plugins: [react(), tailwindAtomic()],
-	server: {port: 3017},
+	server: {
+		port: 3017,
+		strictPort: true,
+		warmup: {
+			clientFiles: ["./src/index.css"],
+		},
+	},
 });

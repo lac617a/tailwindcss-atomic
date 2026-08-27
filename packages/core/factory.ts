@@ -103,6 +103,16 @@ const factory: UnpluginFactory<{
 			await warmupClassMapFromCss();
 
 			if (isCssFile(id)) {
+				// Vite already wrapped the file in the HMR injector (`updateStyle`).
+				// Parsing that JS as CSS wipes the stylesheet → página en blanco y negro.
+				if (
+					code.includes("import.meta") ||
+					code.includes("updateStyle") ||
+					/^\s*(?:import|export)\b/.test(code)
+				) {
+					return null;
+				}
+
 				const {code: next, changed} = processCssAndMaybeInvalidate(code);
 				if (!changed) return null;
 				return {code: next, map: null};
@@ -118,6 +128,11 @@ const factory: UnpluginFactory<{
 		},
 
 		vite: {
+			configResolved(config) {
+				if (config.root) {
+					ATOMIC_RUNTIME.projectRoots.unshift(config.root);
+				}
+			},
 			configureServer(server) {
 				ATOMIC_RUNTIME.viteServer = server;
 			},

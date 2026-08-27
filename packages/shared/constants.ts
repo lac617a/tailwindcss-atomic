@@ -4,7 +4,16 @@ const TAILWIND_DIRECTIVE_RE =
 
 const NESTED_AT_RULES = new Set(["media", "supports", "container"]);
 
-const DEFAULT_TARGET_FUNCTIONS = new Set(["clsx", "classnames", "cn", "cva"]);
+const DEFAULT_TARGET_FUNCTIONS = new Set([
+	"clsx",
+	"class",
+	"classnames",
+	"cn",
+	"cva",
+	"tw",
+	"twMerge",
+	"clsxMerge",
+]);
 
 interface ViteModuleGraph {
 	idToModuleMap: Map<string, unknown>;

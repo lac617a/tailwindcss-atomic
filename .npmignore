@@ -1,0 +1,9 @@
+# Ignorar todo el código fuente de Rust y compilación pesada
+src/
+target/
+Cargo.toml
+Cargo.lock
+
+# PERMITIR pkg y js (asegurar con '!')
+!pkg/
+!js/

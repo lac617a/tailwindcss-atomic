@@ -1,0 +1,23 @@
+{
+  "name": "next-app",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3016",
+    "build": "next build",
+    "start": "next start --port 3016"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss-atomic": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

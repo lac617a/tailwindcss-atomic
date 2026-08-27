@@ -1,9 +1,14 @@
 import postcss from "postcss";
 import {parse} from "@babel/parser";
 import generate from "@babel/generator";
+import babelTraverse from "@babel/traverse";
 import type {Root as PostcssRoot} from "postcss";
 
+const traverse = babelTraverse.default || babelTraverse;
+
 import {NESTED_AT_RULES, ATOMIC_RUNTIME} from "./constants";
+import {transformClassString} from "./css";
+import {getCalleeName} from "./utils";
 
 function atomicizeContainer(container: PostcssRoot) {
 	if (!container.nodes) return false;
@@ -69,7 +74,7 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 		});
 
 		let hasModifications = false;
-		const classMap = atomicRuntime.classMap;
+		const classMap = ATOMIC_RUNTIME.classMap;
 
 		traverse(ast, {
 			JSXAttribute(path) {

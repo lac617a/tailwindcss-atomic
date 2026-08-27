@@ -1,12 +1,18 @@
 import postcss from "postcss";
-import type {Root as PostcssRoot, Rule as PostcssRule} from "postcss";
+import type {
+	ChildNode,
+	Root as PostcssRoot,
+	Rule as PostcssRule,
+} from "postcss";
 
 import {
-	NESTED_AT_RULES,
 	ATOMIC_MARKER,
-	TAILWIND_DIRECTIVE_RE,
 	ATOMIC_RUNTIME,
+	NESTED_AT_RULES,
+	TAILWIND_DIRECTIVE_RE,
 } from "./constants";
+
+import {process_tailwind_css} from "../core/wasm";
 
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);
@@ -55,7 +61,7 @@ function mergeClassMap(classMap: Record<string, string>) {
 	return changed;
 }
 
-function isUtilityRule(node: PostcssRule) {
+function isUtilityRule(node: ChildNode): node is PostcssRule {
 	return node.type === "rule" && String(node.selector).includes(".");
 }
 
@@ -82,7 +88,9 @@ function atomicizeContainer(container: PostcssRoot) {
 
 	const parsed = postcss.parse(rules.join("\n"));
 	const first = utilityNodes[0];
-	for (const atomicNode of parsed.nodes) {
+	if (!first) return mapChanged;
+
+	for (const atomicNode of parsed.nodes ?? []) {
 		first.before(atomicNode.clone());
 	}
 	for (const node of utilityNodes) {
@@ -132,134 +140,15 @@ function applyAtomicCss(css: string) {
 	}
 }
 
-function invalidateJsModules() {
-	const server = ATOMIC_RUNTIME.viteServer;
-	if (!server?.moduleGraph) return;
+function isCssFile(id: string) {
+	const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
 
-	for (const [id, mod] of server.moduleGraph.idToModuleMap) {
-		if (!mod) continue;
-		const cleanId = String(id).split("?")[0];
-		if (!/\.(jsx?|tsx?|mjs|cjs)$/.test(cleanId)) continue;
-		server.moduleGraph.invalidateModule(mod);
-	}
-}
+	if (!cleanId) return false;
 
-function getCalleeName(callee) {
-	if (!callee) return null;
-	if (callee.type === "Identifier") return callee.name;
-	if (callee.type === "MemberExpression") {
-		return callee.property.name || callee.property.value || null;
-	}
-	if (callee.type === "SequenceExpression") {
-		return getCalleeName(callee.expressions[callee.expressions.length - 1]);
-	}
-	return null;
-}
-
-function transformJs(code, targetFunctions) {
-	if (!code || Object.keys(atomicRuntime.classMap).length === 0) {
-		return null;
-	}
-
-	try {
-		const ast = parse(code, {
-			sourceType: "module",
-			plugins: ["jsx", "typescript"],
-		});
-
-		let hasModifications = false;
-		const classMap = atomicRuntime.classMap;
-
-		traverse(ast, {
-			JSXAttribute(path) {
-				if (path.node.name.name !== "className") return;
-
-				if (path.node.value && path.node.value.type === "StringLiteral") {
-					path.node.value.value = transformClassString(
-						path.node.value.value,
-						classMap,
-					);
-					hasModifications = true;
-				}
-
-				if (
-					path.node.value &&
-					path.node.value.type === "JSXExpressionContainer"
-				) {
-					if (processArgument(path.node.value.expression, classMap)) {
-						hasModifications = true;
-					}
-				}
-			},
-
-			CallExpression(path) {
-				const funcName = getCalleeName(path.node.callee);
-
-				if (targetFunctions.has(funcName)) {
-					path.node.arguments.forEach((arg) => {
-						if (processArgument(arg, classMap)) {
-							hasModifications = true;
-						}
-					});
-				}
-
-				if (
-					funcName === "jsx" ||
-					funcName === "jsxs" ||
-					funcName === "_jsx" ||
-					funcName === "_jsxs" ||
-					funcName === "jsxDEV"
-				) {
-					const props = path.node.arguments[1];
-					if (props && props.type === "ObjectExpression") {
-						props.properties.forEach((prop) => {
-							if (prop.type !== "ObjectProperty") return;
-							const key =
-								prop.key.type === "Identifier" ? prop.key.name : prop.key.value;
-							if (key === "className" || key === "class") {
-								if (processArgument(prop.value, classMap)) {
-									hasModifications = true;
-								}
-							}
-						});
-					}
-				}
-			},
-		});
-
-		if (!hasModifications) return null;
-
-		const generateFn = generate.default || generate;
-		const output = generateFn(ast, {}, code);
-
-		return {
-			code: output.code,
-			map: output.map,
-		};
-	} catch {
-		return null;
-	}
-}
-
-function isCssFile(id) {
-	const cleanId = id.split("?")[0].replace(/\\/g, "/");
-	if (/\.module\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId)) {
+	if (/\.module\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId))
 		return false;
-	}
+
 	return /\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId);
 }
 
-function isJsFile(id) {
-	const cleanId = id.split("?")[0].replace(/\\/g, "/");
-	return /\.(jsx?|tsx?|mjs|cjs)$/.test(cleanId);
-}
-
-function resolveWebpackLoaderPath() {
-	const dir =
-		typeof __dirname === "string"
-			? __dirname
-			: path.dirname(fileURLToPath(import.meta.url));
-	return path.resolve(dir, "..", "webpack-loader.cjs");
-}
-
-export {applyAtomicCss, invalidateJsModules};
+export {applyAtomicCss, isCssFile, transformClassString, atomicizeContainer};

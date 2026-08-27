@@ -1,3 +1,3 @@
 "use strict";
 
-module.exports = require("./dist/postcss.cjs").postcssTailwindAtomic;
+module.exports = require("./dist/postcss.cjs");

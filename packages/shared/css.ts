@@ -15,7 +15,7 @@ import {
 } from "./constants";
 
 import {process_tailwind_css} from "../core/wasm";
-import {postcssTailwindAtomic} from "../postcss";
+import postcssTailwindAtomic from "../postcss";
 
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);

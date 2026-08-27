@@ -9,7 +9,7 @@ import {invalidateJsModules} from "./shared/js";
  * Tailwind expande @tailwind/@import; este plugin lee esas reglas
  * y las parte en clases atómicas `_twa(hex)`.
  */
-export function postcssTailwindAtomic() {
+export default function postcssTailwindAtomic() {
 	return {
 		postcssPlugin: "postcss-tailwind-atomic",
 		Once(root: PostcssRoot) {
@@ -30,5 +30,3 @@ export function postcssTailwindAtomic() {
 }
 
 postcssTailwindAtomic.postcss = true;
-
-export default postcssTailwindAtomic;

@@ -1,12 +1,22 @@
 {
 	"name": "tailwindcss-atomic",
-	"version": "1.0.14",
+	"version": "1.0.0",
 	"license": "MIT",
 	"type": "module",
+	"author": "lac6174 <dominyel.r@gmail.com>",
 	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup and next.js!",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
+	"homepage": "https://atomic.profiya.com/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lac617a/tailwindcss-atomic.git",
+		"directory": "packages/tailwindcss-atomic"
+	},
+	"bugs": {
+		"url": "https://github.com/lac617a/tailwindcss-atomic/issues"
+	},
 	"scripts": {
 		"dev": "tsdown --watch --sourcemap",
 		"build": "tsdown"

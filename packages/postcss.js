@@ -1,4 +1,5 @@
-import {applyAtomicCss, invalidateJsModules} from "./shared/utils";
+import {applyAtomicCss} from "./shared/css";
+import {invalidateJsModules} from "./shared/js";
 
 /**
  * PostCSS plugin: va DESPUÉS de Tailwind.
@@ -28,4 +29,3 @@ export function postcssTailwindAtomic() {
 postcssTailwindAtomic.postcss = true;
 
 export default postcssTailwindAtomic;
-export {postcssTailwindAtomic};

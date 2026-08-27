@@ -2,7 +2,7 @@
 
 module.exports = function tailwindAtomicLoader(source) {
 	const callback = this.async();
-	const {transformAtomicSource} = require("./dist/index.js");
+	const {transformAtomicSource} = require("./dist/index.cjs");
 
 	Promise.resolve(transformAtomicSource(source, this.resourcePath))
 		.then((result) => {

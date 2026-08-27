@@ -1,67 +1,17 @@
 {
-  "name": "tailwindcss-atomic",
-  "version": "1.0.14",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "scripts": {
-    "build:wasm": "wasm-pack build --target nodejs --no-pack",
-    "build:js": "tsup packages/index.js packages/next.js packages/postcss.js --format cjs --format esm --clean --shims && node scripts/copy-dts.mjs",
-    "build": "npm run build:wasm && npm run build:js"
-  },
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    },
-    "./next": {
-      "types": "./dist/next.d.ts",
-      "import": "./dist/next.mjs",
-      "require": "./dist/next.js"
-    },
-    "./postcss": {
-      "types": "./dist/postcss.d.ts",
-      "import": "./dist/postcss.mjs",
-      "require": "./postcss.cjs"
-    }
-  },
-  "files": [
-    "pkg",
-    "dist",
-    "postcss.cjs",
-    "webpack-loader.cjs"
-  ],
-  "dependencies": {
-    "@babel/generator": "^7.24.0",
-    "@babel/parser": "^7.24.0",
-    "@babel/traverse": "^7.24.0",
-    "@rollup/pluginutils": "^5.4.0",
-    "defu": "^6.1.7",
-    "fast-sort": "^3.4.1",
-    "fs-extra": "^11.4.0",
-    "htmlparser2": "^12.0.0",
-    "is-css-request": "^1.0.1",
-    "magic-string": "^1.2.3",
-    "pathe": "^2.0.3",
-    "postcss": "^8.5.26",
-    "postcss-selector-parser": "^7.1.5",
-    "tsdown": "^0.22.14",
-    "unplugin": "^1.10.0",
-    "webpack": "^5.109.2"
-  },
-  "devDependencies": {
-    "tsup": "^8.5.1",
-    "turbo": "^2.10.12",
-    "typescript": "^7.0.2"
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/",
-    "main": "./dist/index.js",
-    "module": "./dist/index.js"
-  },
-  "engines": {
-    "node": ">=22.18.0"
-  }
+	"name": "tailwind-atomic-wasm",
+	"private": true,
+	"scripts": {
+		"build": "pnpm build:wasm && pnpm build:js",
+		"build:wasm": "wasm-pack build --target nodejs --no-pack --out-dir packages/pkg",
+		"build:js": "pnpm --filter tailwindcss-atomic build",
+		"dev": "pnpm --filter next-app dev"
+	},
+	"devDependencies": {
+		"turbo": "^2.10.12",
+		"typescript": "^7.0.2"
+	},
+	"engines": {
+		"node": ">=22.18.0"
+	}
 }

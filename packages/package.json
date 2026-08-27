@@ -1,0 +1,64 @@
+{
+	"name": "tailwindcss-atomic",
+	"version": "1.0.14",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsdown"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.cjs"
+		},
+		"./next": {
+			"types": "./dist/next.d.ts",
+			"import": "./dist/next.mjs",
+			"require": "./dist/next.cjs"
+		},
+		"./postcss": {
+			"types": "./dist/postcss.d.ts",
+			"import": "./dist/postcss.mjs",
+			"require": "./postcss.cjs"
+		}
+	},
+	"files": [
+		"pkg",
+		"dist",
+		"postcss.cjs",
+		"webpack-loader.cjs"
+	],
+	"dependencies": {
+		"@babel/generator": "^7.24.0",
+		"@babel/parser": "^7.24.0",
+		"@babel/traverse": "^7.24.0",
+		"postcss": "^8.5.26",
+		"unplugin": "^1.10.0"
+	},
+	"peerDependencies": {
+		"postcss": "^8.0.0",
+		"webpack": ">=5"
+	},
+	"peerDependenciesMeta": {
+		"webpack": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@types/node": "^22",
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/",
+		"main": "./dist/index.cjs",
+		"module": "./dist/index.mjs"
+	},
+	"engines": {
+		"node": ">=22.18.0"
+	}
+}

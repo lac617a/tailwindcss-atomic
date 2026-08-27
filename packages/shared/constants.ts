@@ -15,15 +15,31 @@ interface ViteDevServerLike {
 	moduleGraph: ViteModuleGraph;
 }
 
-const ATOMIC_RUNTIME: {
+const ATOMIC_RUNTIME_KEY = "__tailwindAtomicRuntime__";
+
+type AtomicRuntime = {
 	viteServer: ViteDevServerLike | null;
 	classMap: Record<string, string>;
 	targetFunctions: Set<string>;
-} = {
-	viteServer: null,
-	classMap: Object.create(null),
-	targetFunctions: DEFAULT_TARGET_FUNCTIONS,
+	projectRoots: string[];
 };
+
+function getAtomicRuntime(): AtomicRuntime {
+	const globalRef = globalThis as typeof globalThis & {
+		[ATOMIC_RUNTIME_KEY]?: AtomicRuntime;
+	};
+	if (!globalRef[ATOMIC_RUNTIME_KEY]) {
+		globalRef[ATOMIC_RUNTIME_KEY] = {
+			viteServer: null,
+			classMap: Object.create(null),
+			targetFunctions: DEFAULT_TARGET_FUNCTIONS,
+			projectRoots: [],
+		};
+	}
+	return globalRef[ATOMIC_RUNTIME_KEY];
+}
+
+const ATOMIC_RUNTIME = getAtomicRuntime();
 
 const CSS_ENTRY_CANDIDATES = [
 	"app/globals.css",

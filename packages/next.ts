@@ -33,6 +33,8 @@ export function withTailwindAtomic(
 	return {
 		...nextConfig,
 		webpack(config: Configuration, webpackOptions: NextWebpackOptions) {
+			process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= process.cwd();
+
 			config.plugins ??= [];
 			config.plugins.push(webpackTailwindAtomic(options));
 

@@ -92,17 +92,11 @@ const factory: UnpluginFactory<{
 			const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
 			if (!cleanId) return false;
 
-			const normalizedCwd = process.cwd().replace(/\\/g, "/");
-
-			if (cleanId.includes("node_modules") || cleanId.includes(".next")) {
+			if (cleanId.includes("node_modules") || cleanId.includes("/.next/")) {
 				return false;
 			}
 
-			const isInside =
-				cleanId.startsWith(normalizedCwd) ||
-				id.replace(/\\/g, "/").startsWith(normalizedCwd);
-
-			return isInside && (isCssFile(cleanId) || isJsFile(cleanId));
+			return isCssFile(cleanId) || isJsFile(cleanId);
 		},
 
 		async transform(code, id) {
@@ -115,7 +109,9 @@ const factory: UnpluginFactory<{
 			}
 
 			if (isJsFile(id)) {
-				return transformJs(code, targetFunctions);
+				const result = transformJs(code, targetFunctions);
+				if (!result.code) return null;
+				return result;
 			}
 
 			return null;
@@ -134,6 +130,18 @@ const factory: UnpluginFactory<{
 		},
 
 		webpack(compiler) {
+			if (typeof compiler.context === "string" && compiler.context) {
+				process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= compiler.context;
+				ATOMIC_RUNTIME.projectRoots.push(compiler.context);
+			}
+
+			compiler.hooks.beforeCompile.tapPromise(
+				"tailwind-atomic-plugin",
+				async () => {
+					await warmupClassMapFromCss();
+				},
+			);
+
 			const {Compilation, sources, NormalModule} = compiler.webpack;
 			const {RawSource} = sources;
 			const webpackLoaderPath = resolveWebpackLoaderPath();
@@ -190,7 +198,7 @@ const factory: UnpluginFactory<{
 
 								if (/\.[cm]?js$/.test(fileName)) {
 									const result = transformJs(text, targetFunctions);
-									if (result) {
+									if (result.code) {
 										compilation.updateAsset(
 											fileName,
 											new RawSource(result.code),

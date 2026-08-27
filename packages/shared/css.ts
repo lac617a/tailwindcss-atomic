@@ -156,36 +156,171 @@ function isCssFile(id: string) {
 
 let warmupPromise: Promise<unknown> | undefined;
 
+function collectSearchRoots(
+	resolve: (...paths: string[]) => string,
+	dirname: (path: string) => string,
+	parse: (path: string) => {root: string},
+) {
+	const starts = [
+		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"],
+		...ATOMIC_RUNTIME.projectRoots,
+		process.cwd(),
+		process.env["INIT_CWD"],
+	].filter((dir): dir is string => Boolean(dir));
+
+	const bases: string[] = [];
+	const seen = new Set<string>();
+
+	for (const start of starts) {
+		let dir = resolve(start);
+		const {root} = parse(dir);
+		for (let i = 0; i < 8; i++) {
+			const key = dir.replace(/\\/g, "/").toLowerCase();
+			if (!seen.has(key)) {
+				seen.add(key);
+				bases.push(dir);
+			}
+			if (dir === root) break;
+			dir = dirname(dir);
+		}
+	}
+
+	return bases;
+}
+
+function findCssEntry(
+	existsSync: (path: string) => boolean,
+	readdirSync: (path: string) => string[],
+	statSync: (path: string) => {isDirectory(): boolean},
+	resolve: (...paths: string[]) => string,
+	join: (...paths: string[]) => string,
+	dirname: (path: string) => string,
+	parse: (path: string) => {root: string},
+) {
+	const bases = collectSearchRoots(resolve, dirname, parse);
+
+	for (const base of bases) {
+		for (const rel of CSS_ENTRY_CANDIDATES) {
+			const abs = resolve(base, rel);
+			if (existsSync(abs)) return abs;
+		}
+	}
+
+	const skip = new Set([
+		"node_modules",
+		".next",
+		".git",
+		"dist",
+		"pkg",
+		"target",
+		".turbo",
+	]);
+
+	function walk(dir: string, depth: number): string | undefined {
+		if (depth > 3) return;
+		let names: string[];
+		try {
+			names = readdirSync(dir);
+		} catch {
+			return;
+		}
+
+		for (const name of names) {
+			if (skip.has(name)) continue;
+			const full = join(dir, name);
+			try {
+				if (!statSync(full).isDirectory()) continue;
+			} catch {
+				continue;
+			}
+
+			for (const rel of CSS_ENTRY_CANDIDATES) {
+				const abs = resolve(full, rel);
+				if (existsSync(abs)) return abs;
+			}
+
+			const nested = walk(full, depth + 1);
+			if (nested) return nested;
+		}
+	}
+
+	for (const base of bases) {
+		const found = walk(base, 0);
+		if (found) return found;
+	}
+}
+
+function findNearestPackageDir(
+	startDir: string,
+	existsSync: (path: string) => boolean,
+	join: (...paths: string[]) => string,
+	dirname: (path: string) => string,
+	parse: (path: string) => {root: string},
+) {
+	let dir = startDir;
+	const {root} = parse(dir);
+	while (true) {
+		if (existsSync(join(dir, "package.json"))) return dir;
+		if (dir === root) return startDir;
+		dir = dirname(dir);
+	}
+}
+
+async function runWarmup() {
+	const {existsSync, readFileSync, readdirSync, statSync} = await import(
+		"node:fs"
+	);
+	const {resolve, join, dirname, parse} = await import("node:path");
+
+	const cssPath = findCssEntry(
+		existsSync,
+		readdirSync,
+		statSync,
+		resolve,
+		join,
+		dirname,
+		parse,
+	);
+	if (!cssPath) return;
+
+	const pkgDir = findNearestPackageDir(
+		dirname(cssPath),
+		existsSync,
+		join,
+		dirname,
+		parse,
+	);
+	const appRequire = createRequire(join(pkgDir, "package.json"));
+	const plugins = [];
+	try {
+		const tw = appRequire("@tailwindcss/postcss");
+		plugins.push(tw.default || tw);
+	} catch {
+		try {
+			plugins.push(appRequire("tailwindcss"));
+		} catch {
+			return;
+		}
+	}
+
+	plugins.push(postcssTailwindAtomic());
+	const source = readFileSync(cssPath, "utf8");
+	await postcss(plugins).process(source, {from: cssPath});
+}
+
 async function warmupClassMapFromCss() {
 	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
 	if (warmupPromise) return warmupPromise;
 
-	warmupPromise = (async () => {
-		const {existsSync, readFileSync} = await import("node:fs");
-		const {resolve, join} = await import("node:path");
-
-		const cssPath = CSS_ENTRY_CANDIDATES.map((rel) =>
-			resolve(process.cwd(), rel),
-		).find((abs) => existsSync(abs));
-		if (!cssPath) return;
-
-		const appRequire = createRequire(join(process.cwd(), "package.json"));
-		const plugins = [];
-		try {
-			const tw = appRequire("@tailwindcss/postcss");
-			plugins.push(tw.default || tw);
-		} catch {
-			try {
-				plugins.push(appRequire("tailwindcss"));
-			} catch {
-				return;
+	warmupPromise = runWarmup()
+		.catch((error) => {
+			console.warn("[tailwind-atomic] warmup failed:", error);
+		})
+		.finally(() => {
+			if (Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
+				warmupPromise = undefined;
 			}
-		}
-
-		plugins.push(postcssTailwindAtomic());
-		const source = readFileSync(cssPath, "utf8");
-		await postcss(plugins).process(source, {from: cssPath});
-	})();
+		});
 
 	return warmupPromise;
 }

@@ -1,11 +1,22 @@
 import {parse} from "@babel/parser";
-import generate from "@babel/generator";
-import traverse from "@babel/traverse";
+import generateImport from "@babel/generator";
+import traverseImport from "@babel/traverse";
 
 import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
 import {getCalleeName} from "./utils";
 import {processArgument} from "../core/process";
+
+function interopDefault<T>(mod: T | {default: T}): T {
+	let current: unknown = mod;
+	while (current && typeof current === "object" && "default" in current) {
+		current = (current as {default: unknown}).default;
+	}
+	return current as T;
+}
+
+const generate = interopDefault(generateImport);
+const traverse = interopDefault(traverseImport);
 
 function isJsFile(id: string) {
 	const cleanId = id.split("?")[0]?.replace(/\\/g, "/");

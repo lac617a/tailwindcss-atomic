@@ -6,7 +6,11 @@
 		"build": "pnpm build:wasm && pnpm build:js",
 		"build:wasm": "wasm-pack build --target nodejs --no-pack --out-dir packages/pkg && node -e \"require('fs').writeFileSync('packages/pkg/package.json', JSON.stringify({type:'commonjs'}))\"",
 		"build:js": "pnpm --filter tailwindcss-atomic build",
-		"dev": "pnpm --filter next-app dev"
+		"dev": "pnpm --filter next-app dev",
+		"dev:vite": "pnpm --filter vite-app dev",
+		"dev:next12": "pnpm --filter next12-app dev",
+		"dev:turbo": "pnpm --filter next-turbo-app dev",
+		"dev:examples": "turbo run dev --filter=next-app --filter=vite-app --filter=next12-app --filter=next-turbo-app"
 	},
 	"devDependencies": {
 		"@types/node": "^22.20.1",

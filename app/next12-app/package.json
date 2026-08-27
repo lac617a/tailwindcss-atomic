@@ -1,0 +1,24 @@
+{
+  "name": "next12-app",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3018",
+    "build": "next build",
+    "start": "next start --port 3018"
+  },
+  "dependencies": {
+    "next": "^12.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss-atomic": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.6.3"
+  }
+}

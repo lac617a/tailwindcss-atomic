@@ -27,9 +27,12 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | --- | --- |
 | `src/` | Crate Rust (`lightningcss` + `wasm-bindgen`) |
 | `packages/` | Paquete npm `tailwindcss-atomic` |
-| `app/next-app/` | Ejemplo con Next.js 15 y App Router |
+| `app/next-app/` | Next.js 15 · App Router · Tailwind 4 |
+| `app/vite-app/` | Vite · React 18 · Tailwind 3 |
+| `app/next12-app/` | Next.js 12 · Pages Router · Tailwind 3 |
+| `app/next-turbo-app/` | Next.js 15 · App Router · Turbopack |
 
-La guía de uso de la librería está en [`packages/README.md`](packages/README.md). El ejemplo se documenta en [`app/next-app/README.md`](app/next-app/README.md).
+La guía de uso de la librería está en [`packages/README.md`](packages/README.md).
 
 ## Requisitos
 
@@ -42,7 +45,11 @@ La guía de uso de la librería está en [`packages/README.md`](packages/README.
 ```bash
 pnpm install
 pnpm build          # WASM + JavaScript
-pnpm dev            # ejemplo Next en http://localhost:3016
+pnpm dev            # Next 15 · http://localhost:3016
+pnpm dev:vite       # Vite · http://localhost:3017
+pnpm dev:next12     # Next 12 · http://localhost:3018
+pnpm dev:turbo      # Next 15 Turbopack · http://localhost:3019
+pnpm dev:examples   # los cuatro a la vez (Turborepo)
 ```
 
 Scripts sueltos:

@@ -22,17 +22,32 @@ Sin el paso 2 el CSS no se atomiciza. Sin el paso 3 el DOM sigue con `flex` y `p
 
 ## PostCSS
 
+Tailwind **v4**:
+
 ```js
 // postcss.config.mjs
 export default {
 	plugins: {
-		"@tailwindcss/postcss": {}, // o "tailwindcss" en v3
+		"@tailwindcss/postcss": {},
 		"tailwindcss-atomic/postcss": {},
 	},
 };
 ```
 
-## Next.js
+Tailwind **v3** (Vite o Next 12): el plugin va **después** de `tailwindcss` y `autoprefixer`.
+
+```js
+// postcss.config.js
+module.exports = {
+	plugins: {
+		tailwindcss: {},
+		autoprefixer: {},
+		"tailwindcss-atomic/postcss": {},
+	},
+};
+```
+
+## Next.js 15 (App Router, Tailwind 4)
 
 ```ts
 // next.config.ts
@@ -43,18 +58,51 @@ const nextConfig = {reactStrictMode: true};
 export default withTailwindAtomic(nextConfig);
 ```
 
-Añade también el plugin de PostCSS como arriba. `withTailwindAtomic` envuelve Webpack (loader + plugin) y respeta un `webpack()` que ya tengas en la config.
+Hay un ejemplo en `app/next-app` (`pnpm dev`, puerto 3016).
 
-## Vite
+## Next.js 15 + Turbopack
+
+```ts
+// next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({
+	reactStrictMode: true,
+});
+```
+
+```json
+{ "scripts": { "dev": "next dev --turbopack --port 3019" } }
+```
+
+`withTailwindAtomic` rellena `turbopack.rules` con el loader de TS/JS (además del hook de Webpack). El PostCSS de Tailwind 4 sigue siendo obligatorio. Ejemplo: `app/next-turbo-app` (`pnpm dev:turbo`).
+
+## Next.js 12 (Pages Router, Tailwind 3)
+
+```js
+// next.config.mjs
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({
+	reactStrictMode: true,
+});
+```
+
+Usa `pages/`, `styles/globals.css` con `@tailwind base/components/utilities` y el PostCSS de v3 de arriba. Ejemplo: `app/next12-app` (`pnpm dev:next12`, puerto 3018).
+
+## Vite (Tailwind 3)
 
 ```ts
 import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
 import tailwindAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
-	plugins: [tailwindAtomic()],
+	plugins: [react(), tailwindAtomic()],
 });
 ```
+
+Ejemplo: `app/vite-app` (`pnpm dev:vite`, puerto 3017).
 
 ## Webpack
 

@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
 	title: "Tailwind Atomic · Next.js 15",
 	description:
-		"Ejemplo de App Router donde las utilidades de Tailwind se reescriben a clases _twa(hex).",
+		"Ejemplo de App Router donde las utilidades de Tailwind se reescriben a clases _tw(hex).",
 };
 
 export default function RootLayout({

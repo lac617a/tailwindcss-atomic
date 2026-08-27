@@ -7,7 +7,7 @@ import {invalidateJsModules} from "./shared/js";
 /**
  * PostCSS plugin: va DESPUÉS de Tailwind.
  * Tailwind expande @tailwind/@import; este plugin lee esas reglas
- * y las parte en clases atómicas `_twa(hex)`.
+ * y las parte en clases atómicas `_tw(hex)`.
  */
 export default function postcssTailwindAtomic() {
 	return {

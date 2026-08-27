@@ -25,7 +25,7 @@ export default function HomePage() {
 					</code>
 					, sino hashes{" "}
 					<code className="rounded bg-zinc-900 px-1.5 py-0.5 text-sky-300">
-						_twa…
+						_tw…
 					</code>
 					.
 				</p>

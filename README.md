@@ -1,0 +1,59 @@
+# Tailwind Atomic
+
+Monorepo de **tailwindcss-atomic**: un plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
+
+El motor de hashing vive en **Rust compilado a WebAssembly**. El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup y Next.js.
+
+## Qué hace
+
+Tailwind emite reglas como:
+
+```css
+.flex {
+	display: flex;
+}
+.p-6 {
+	padding: 1.5rem;
+}
+```
+
+Este proyecto las descompone en una clase por declaración y las deduplica. En el DOM, `className="flex p-6"` pasa a algo como `class="_215464 _69df78"`. El HTML pesa menos y las utilidades originales no quedan a la vista.
+
+El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El sufijo son 6 dígitos hex, ~16,7 millones de valores.
+
+## Estructura
+
+| Ruta | Contenido |
+| --- | --- |
+| `src/` | Crate Rust (`lightningcss` + `wasm-bindgen`) |
+| `packages/` | Paquete npm `tailwindcss-atomic` |
+| `app/next-app/` | Ejemplo con Next.js 15 y App Router |
+
+La guía de uso de la librería está en [`packages/README.md`](packages/README.md). El ejemplo se documenta en [`app/next-app/README.md`](app/next-app/README.md).
+
+## Requisitos
+
+- Node.js **≥ 22.18.0**
+- [pnpm](https://pnpm.io/)
+- Para compilar el WASM: Rust (`wasm32-unknown-unknown`) y [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+
+## Desarrollo
+
+```bash
+pnpm install
+pnpm build          # WASM + JavaScript
+pnpm dev            # ejemplo Next en http://localhost:3016
+```
+
+Scripts sueltos:
+
+```bash
+pnpm build:wasm     # wasm-pack → packages/pkg
+pnpm build:js       # tsdown (ESM + CJS)
+```
+
+Tras cambiar `src/lib.rs` hay que volver a `pnpm build:wasm` y reiniciar el servidor de desarrollo: el módulo WASM se carga al arrancar el proceso.
+
+## Licencia
+
+[MIT](LICENSE)

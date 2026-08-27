@@ -1,7 +1,14 @@
 import {defineConfig} from "tsdown";
 
 export default defineConfig({
-	entry: ["index.js", "next.js", "postcss.js"],
+	entry: [
+		"index.ts",
+		"next.ts",
+		"postcss.ts",
+		"webpack.ts",
+		"rollup.ts",
+		"vite.ts",
+	],
 	format: ["esm", "cjs"],
 	platform: "node",
 	clean: true,

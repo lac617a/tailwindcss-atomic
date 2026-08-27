@@ -1,4 +1,5 @@
 import postcss from "postcss";
+import {createRequire} from "node:module";
 import type {
 	ChildNode,
 	Root as PostcssRoot,
@@ -9,10 +10,12 @@ import {
 	ATOMIC_MARKER,
 	ATOMIC_RUNTIME,
 	NESTED_AT_RULES,
+	CSS_ENTRY_CANDIDATES,
 	TAILWIND_DIRECTIVE_RE,
 } from "./constants";
 
 import {process_tailwind_css} from "../core/wasm";
+import {postcssTailwindAtomic} from "../postcss";
 
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);
@@ -151,4 +154,47 @@ function isCssFile(id: string) {
 	return /\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId);
 }
 
-export {applyAtomicCss, isCssFile, transformClassString, atomicizeContainer};
+let warmupPromise: Promise<unknown> | undefined;
+
+async function warmupClassMapFromCss() {
+	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
+	if (warmupPromise) return warmupPromise;
+
+	warmupPromise = (async () => {
+		const {existsSync, readFileSync} = await import("node:fs");
+		const {resolve, join} = await import("node:path");
+
+		const cssPath = CSS_ENTRY_CANDIDATES.map((rel) =>
+			resolve(process.cwd(), rel),
+		).find((abs) => existsSync(abs));
+		if (!cssPath) return;
+
+		const appRequire = createRequire(join(process.cwd(), "package.json"));
+		const plugins = [];
+		try {
+			const tw = appRequire("@tailwindcss/postcss");
+			plugins.push(tw.default || tw);
+		} catch {
+			try {
+				plugins.push(appRequire("tailwindcss"));
+			} catch {
+				return;
+			}
+		}
+
+		plugins.push(postcssTailwindAtomic());
+		const source = readFileSync(cssPath, "utf8");
+		await postcss(plugins).process(source, {from: cssPath});
+	})();
+
+	return warmupPromise;
+}
+
+export {
+	isCssFile,
+	mergeClassMap,
+	applyAtomicCss,
+	atomicizeContainer,
+	transformClassString,
+	warmupClassMapFromCss,
+};

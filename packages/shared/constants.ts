@@ -6,7 +6,20 @@ const NESTED_AT_RULES = new Set(["media", "supports", "container"]);
 
 const DEFAULT_TARGET_FUNCTIONS = new Set(["clsx", "classnames", "cn", "cva"]);
 
-const ATOMIC_RUNTIME = {
+interface ViteModuleGraph {
+	idToModuleMap: Map<string, unknown>;
+	invalidateModule(mod: unknown): void;
+}
+
+interface ViteDevServerLike {
+	moduleGraph: ViteModuleGraph;
+}
+
+const ATOMIC_RUNTIME: {
+	viteServer: ViteDevServerLike | null;
+	classMap: Record<string, string>;
+	targetFunctions: Set<string>;
+} = {
 	viteServer: null,
 	classMap: Object.create(null),
 	targetFunctions: DEFAULT_TARGET_FUNCTIONS,

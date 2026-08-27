@@ -1,3 +1,6 @@
+import postcss from "postcss";
+import type {Root as PostcssRoot} from "postcss";
+
 import {applyAtomicCss} from "./shared/css";
 import {invalidateJsModules} from "./shared/js";
 
@@ -9,14 +12,14 @@ import {invalidateJsModules} from "./shared/js";
 export function postcssTailwindAtomic() {
 	return {
 		postcssPlugin: "postcss-tailwind-atomic",
-		Once(root, {postcss: processor}) {
+		Once(root: PostcssRoot) {
 			const css = root.toString();
 			const {code, changed, mapChanged} = applyAtomicCss(css);
 			if (!changed) return;
 
 			if (mapChanged) invalidateJsModules();
 
-			const parsed = processor.parse(code, {
+			const parsed = postcss.parse(code, {
 				from: root.source?.input?.from,
 			});
 

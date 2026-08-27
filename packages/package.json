@@ -9,6 +9,14 @@
 		"dev": "tsdown --watch --sourcemap",
 		"build": "tsdown"
 	},
+	"keywords": [
+		"tailwindcss",
+		"utilities",
+		"atomic",
+		"class",
+		"obfuscator",
+		"obfuscation"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -20,23 +28,39 @@
 			"import": "./dist/next.mjs",
 			"require": "./dist/next.cjs"
 		},
+		"./vite": {
+			"types": "./dist/vite.d.ts",
+			"import": "./dist/vite.js",
+			"default": "./dist/vite.js"
+		},
+		"./webpack": {
+			"types": "./dist/webpack.d.ts",
+			"import": "./dist/webpack.js",
+			"default": "./dist/webpack.js"
+		},
+		"./rollup": {
+			"types": "./dist/rollup.d.ts",
+			"import": "./dist/rollup.js",
+			"default": "./dist/rollup.js"
+		},
 		"./postcss": {
 			"types": "./dist/postcss.d.ts",
 			"import": "./dist/postcss.mjs",
 			"require": "./postcss.cjs"
-		}
+		},
+		"./*": "./*"
 	},
 	"files": [
 		"pkg",
 		"dist",
-		"postcss.cjs",
-		"webpack-loader.cjs"
+		"postcss.cjs"
 	],
 	"dependencies": {
 		"@babel/generator": "^7.24.0",
 		"@babel/parser": "^7.24.0",
 		"@babel/traverse": "^7.24.0",
-		"postcss": "^8.5.26",
+		"@babel/types": "^7.24.0",
+		"postcss": "^8.0.0",
 		"unplugin": "^1.10.0"
 	},
 	"peerDependencies": {
@@ -49,7 +73,9 @@
 		}
 	},
 	"devDependencies": {
-		"@types/node": "^22",
+		"@types/babel__generator": "^7.27.0",
+		"@types/babel__traverse": "^7.28.0",
+		"@types/node": "^22.20.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2"
 	},

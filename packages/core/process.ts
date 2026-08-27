@@ -1,15 +1,36 @@
-import {transformClassString} from "../shared/utils";
+import {transformClassString} from "../shared/css";
+import type {
+	ObjectExpression,
+	TemplateLiteral,
+	Expression,
+	SpreadElement,
+	JSXEmptyExpression,
+	ArgumentPlaceholder,
+} from "@babel/types";
+
+type ProcessableNode =
+	| Expression
+	| SpreadElement
+	| JSXEmptyExpression
+	| ArgumentPlaceholder
+	| null
+	| undefined;
 
 let modified = false;
 
-function processTemplateLiteral(templateLiteral, classMap) {
+function processTemplateLiteral(
+	templateLiteral: TemplateLiteral,
+	classMap: Record<string, string>,
+) {
 	templateLiteral.quasis.forEach((element) => {
 		if (element.value && element.value.raw) {
 			element.value.raw = transformClassString(element.value.raw, classMap);
-			element.value.cooked = transformClassString(
-				element.value.cooked,
-				classMap,
-			);
+			if (element.value.cooked != null) {
+				element.value.cooked = transformClassString(
+					element.value.cooked,
+					classMap,
+				);
+			}
 			modified = true;
 		}
 	});
@@ -17,14 +38,17 @@ function processTemplateLiteral(templateLiteral, classMap) {
 	return modified;
 }
 
-function processObjectExpression(objectExpression, classMap) {
+function processObjectExpression(
+	objectExpression: ObjectExpression,
+	classMap: Record<string, string>,
+) {
 	objectExpression.properties.forEach((property) => {
 		if (property.type === "ObjectProperty") {
 			if (property.key.type === "StringLiteral") {
-				prop.key.value = transformClassString(prop.key.value, classMap);
+				property.key.value = transformClassString(property.key.value, classMap);
 				modified = true;
-			} else if (prop.key.type === "Identifier" && !prop.computed) {
-				prop.key.name = transformClassString(prop.key.name, classMap);
+			} else if (property.key.type === "Identifier" && !property.computed) {
+				property.key.name = transformClassString(property.key.name, classMap);
 				modified = true;
 			}
 		}
@@ -32,7 +56,10 @@ function processObjectExpression(objectExpression, classMap) {
 	return modified;
 }
 
-export function processArgument(argNode, classMap) {
+export function processArgument(
+	argNode: ProcessableNode,
+	classMap: Record<string, string>,
+): boolean {
 	if (!argNode) return false;
 
 	switch (argNode.type) {
@@ -48,10 +75,11 @@ export function processArgument(argNode, classMap) {
 				if (processArgument(el, classMap)) modified = true;
 			});
 			return modified;
-		case "ConditionalExpression":
+		case "ConditionalExpression": {
 			const altMod = processArgument(argNode.alternate, classMap);
 			const consMod = processArgument(argNode.consequent, classMap);
 			return altMod || consMod;
+		}
 		case "LogicalExpression":
 			return processArgument(argNode.right, classMap);
 		default:

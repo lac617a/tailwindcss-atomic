@@ -1,24 +1,43 @@
 import {createRequire} from "node:module";
-import {webpackTailwindAtomic} from "./index.js";
+import type {Configuration} from "webpack";
+
+import webpackTailwindAtomic from "./webpack";
 
 const req = createRequire(import.meta.url);
 
+type NextWebpackOptions = {
+	dev: boolean;
+};
+
+type NextConfig = {
+	webpack?: (
+		config: Configuration,
+		options: NextWebpackOptions,
+	) => Configuration;
+};
+
 function resolveAtomicLoader() {
 	try {
-		return req.resolve("../webpack-loader.cjs");
+		return req.resolve("../loader.js");
 	} catch {
-		return req.resolve("../../webpack-loader.cjs");
+		return req.resolve("../../loader.js");
 	}
 }
 
-export function withTailwindAtomic(nextConfig = {}, options = {}) {
+export function withTailwindAtomic(
+	nextConfig: NextConfig = {},
+	options: Parameters<typeof webpackTailwindAtomic>[0] = {},
+): NextConfig {
 	const atomicLoader = resolveAtomicLoader();
 
 	return {
 		...nextConfig,
-		webpack(config, webpackOptions) {
+		webpack(config: Configuration, webpackOptions: NextWebpackOptions) {
+			config.plugins ??= [];
 			config.plugins.push(webpackTailwindAtomic(options));
 
+			config.module ??= {rules: []};
+			config.module.rules ??= [];
 			config.module.rules.unshift({
 				test: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
 				exclude: [/node_modules/, /[\\/]\.next[\\/]/],

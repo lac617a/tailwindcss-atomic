@@ -1,47 +1,11 @@
-import postcss from "postcss";
 import {parse} from "@babel/parser";
 import generate from "@babel/generator";
-import babelTraverse from "@babel/traverse";
-import type {Root as PostcssRoot} from "postcss";
+import traverse from "@babel/traverse";
 
-const traverse = babelTraverse.default || babelTraverse;
-
-import {NESTED_AT_RULES, ATOMIC_RUNTIME} from "./constants";
+import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
 import {getCalleeName} from "./utils";
-
-function atomicizeContainer(container: PostcssRoot) {
-	if (!container.nodes) return false;
-
-	let mapChanged = false;
-
-	for (const node of [...container.nodes]) {
-		if (node.type === "atrule" && NESTED_AT_RULES.has(node.name)) {
-			if (atomicizeContainer(node as unknown as PostcssRoot)) mapChanged = true;
-		}
-	}
-
-	const utilityNodes = container.nodes.filter(isUtilityRule);
-	if (!utilityNodes.length) return mapChanged;
-
-	const utilityCss = utilityNodes.map((node) => node.toString()).join("\n");
-	const {class_map, css_rules} = process_tailwind_css(utilityCss);
-	if (mergeClassMap(class_map)) mapChanged = true;
-
-	const rules = Array.isArray(css_rules) ? css_rules : [];
-	if (!rules.length) return mapChanged;
-
-	const parsed = postcss.parse(rules.join("\n"));
-	const first = utilityNodes[0];
-	for (const atomicNode of parsed.nodes) {
-		first.before(atomicNode.clone());
-	}
-	for (const node of utilityNodes) {
-		node.remove();
-	}
-
-	return true;
-}
+import {processArgument} from "../core/process";
 
 function isJsFile(id: string) {
 	const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
@@ -64,7 +28,7 @@ function invalidateJsModules() {
 
 function transformJs(code: string, targetFunctions: Set<string>) {
 	if (!code || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
-		return null;
+		return {code: null, map: null};
 	}
 
 	try {
@@ -101,7 +65,7 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 			CallExpression(path) {
 				const funcName = getCalleeName(path.node.callee);
 
-				if (targetFunctions.has(funcName)) {
+				if (funcName && targetFunctions.has(funcName)) {
 					path.node.arguments.forEach((arg) => {
 						if (processArgument(arg, classMap)) {
 							hasModifications = true;
@@ -120,8 +84,14 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 					if (props && props.type === "ObjectExpression") {
 						props.properties.forEach((prop) => {
 							if (prop.type !== "ObjectProperty") return;
-							const key =
-								prop.key.type === "Identifier" ? prop.key.name : prop.key.value;
+
+							let key: string | undefined;
+							if (!prop.computed && prop.key.type === "Identifier") {
+								key = prop.key.name;
+							} else if (prop.key.type === "StringLiteral") {
+								key = prop.key.value;
+							}
+
 							if (key === "className" || key === "class") {
 								if (processArgument(prop.value, classMap)) {
 									hasModifications = true;
@@ -133,18 +103,17 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 			},
 		});
 
-		if (!hasModifications) return null;
+		if (!hasModifications) return {code: null, map: null};
 
-		const generateFn = generate.default || generate;
-		const output = generateFn(ast, {}, code);
+		const output = generate(ast, {}, code);
 
 		return {
 			code: output.code,
 			map: output.map,
 		};
 	} catch {
-		return null;
+		return {code: null, map: null};
 	}
 }
 
-export {transformJs, isJsFile, invalidateJsModules, atomicizeContainer};
+export {transformJs, isJsFile, invalidateJsModules};

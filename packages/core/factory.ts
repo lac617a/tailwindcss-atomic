@@ -1,35 +1,39 @@
-import {createRequire} from "node:module";
-import {fileURLToPath} from "node:url";
-import path from "node:path";
-import babelTraverse from "@babel/traverse";
-import postcss from "postcss";
-
-import {
-	ATOMIC_RUNTIME,
-	CSS_ENTRY_CANDIDATES,
-	DEFAULT_TARGET_FUNCTIONS,
-} from "../shared/constants";
-
-import {process_tailwind_css} from "./wasm";
 import {UnpluginFactory} from "unplugin";
-import {invalidateJsModules} from "../shared/js";
+import path from "node:path";
 
-const traverse = babelTraverse.default || babelTraverse;
+import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "../shared/constants";
 
-export async function transformAtomicSource(code, id) {
+import type {OutputBundle} from "../types";
+import {process_tailwind_css} from "./wasm";
+import {resolveWebpackLoaderPath} from "../shared/utils";
+import {
+	isCssFile,
+	mergeClassMap,
+	applyAtomicCss,
+	warmupClassMapFromCss,
+} from "../shared/css";
+import {invalidateJsModules, isJsFile, transformJs} from "../shared/js";
+
+export async function transformAtomicSource(code: string, id: string) {
 	await warmupClassMapFromCss();
-	if (!code || !id) return null;
+	if (!code || !id) return {code: null, map: null};
 
-	const cleanId = String(id).split("?")[0].replace(/\\/g, "/");
-	if (cleanId.includes("node_modules") || cleanId.includes("/.next/")) {
-		return null;
+	const cleanId = String(id).split("?")[0]?.replace(/\\/g, "/");
+
+	if (
+		!cleanId ||
+		cleanId.includes("node_modules") ||
+		cleanId.includes("/.next/")
+	) {
+		return {code: null, map: null};
 	}
-	if (!isJsFile(cleanId)) return null;
+
+	if (!isJsFile(cleanId)) return {code: null, map: null};
 
 	return transformJs(code, ATOMIC_RUNTIME.targetFunctions);
 }
 
-function rewriteBundle(bundle, targetFunctions) {
+function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
 	for (const file of Object.values(bundle)) {
 		if (file.type === "asset" && file.fileName.endsWith(".css")) {
 			const source =
@@ -44,47 +48,11 @@ function rewriteBundle(bundle, targetFunctions) {
 	for (const file of Object.values(bundle)) {
 		if (file.type === "chunk" && typeof file.code === "string") {
 			const result = transformJs(file.code, targetFunctions);
-			if (result) {
+			if (result.code) {
 				file.code = result.code;
 			}
 		}
 	}
-}
-
-let warmupPromise;
-
-async function warmupClassMapFromCss() {
-	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
-	if (warmupPromise) return warmupPromise;
-
-	warmupPromise = (async () => {
-		const {existsSync, readFileSync} = await import("node:fs");
-		const {resolve, join} = await import("node:path");
-
-		const cssPath = CSS_ENTRY_CANDIDATES.map((rel) =>
-			resolve(process.cwd(), rel),
-		).find((abs) => existsSync(abs));
-		if (!cssPath) return;
-
-		const appRequire = createRequire(join(process.cwd(), "package.json"));
-		const plugins = [];
-		try {
-			const tw = appRequire("@tailwindcss/postcss");
-			plugins.push(tw.default || tw);
-		} catch {
-			try {
-				plugins.push(appRequire("tailwindcss"));
-			} catch {
-				return;
-			}
-		}
-
-		plugins.push(postcssTailwindAtomic());
-		const source = readFileSync(cssPath, "utf8");
-		await postcss(plugins).process(source, {from: cssPath});
-	})();
-
-	return warmupPromise;
 }
 
 const factory: UnpluginFactory<{
@@ -121,7 +89,9 @@ const factory: UnpluginFactory<{
 		transformInclude(id) {
 			if (!id) return false;
 
-			const cleanId = id.split("?")[0].replace(/\\/g, "/");
+			const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
+			if (!cleanId) return false;
+
 			const normalizedCwd = process.cwd().replace(/\\/g, "/");
 
 			if (cleanId.includes("node_modules") || cleanId.includes(".next")) {

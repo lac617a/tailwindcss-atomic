@@ -14,6 +14,7 @@ pkg
 
 # testing
 coverage
+packages/loader.cjs
 
 # next.js
 .next/

@@ -1,5 +1,9 @@
 # Tailwind Atomic
 
+[![codecov](https://codecov.io/gh/lac617a/tailwindcss-atomic/branch/main/graph/badge.svg)](https://codecov.io/gh/lac617a/tailwindcss-atomic)
+[![GitHub stars](https://img.shields.io/github/stars/lac617a/tailwindcss-atomic)](https://github.com/lac617a/tailwindcss-atomic/stargazers)
+[![npm downloads](https://img.shields.io/npm/dm/tailwindcss-atomic.svg)](https://www.npmjs.com/package/tailwindcss-atomic)
+
 Monorepo de **tailwindcss-atomic**: un plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
 
 El motor de hashing vive en **Rust compilado a WebAssembly**. El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup y Next.js.
@@ -45,6 +49,8 @@ La guía de uso de la librería está en [`packages/README.md`](packages/README.
 ```bash
 pnpm install
 pnpm build          # WASM + JavaScript
+pnpm test           # Vitest (packages/__test__)
+pnpm test:coverage  # coverage lcov para Codecov
 pnpm dev            # Next 15 · http://localhost:3016
 pnpm dev:vite       # Vite · http://localhost:3017
 pnpm dev:next12     # Next 12 · http://localhost:3018

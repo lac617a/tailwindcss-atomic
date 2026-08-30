@@ -10,7 +10,9 @@
 		"dev:vite": "pnpm --filter vite-app dev",
 		"dev:next12": "pnpm --filter next12-app dev",
 		"dev:turbo": "pnpm --filter next-turbo-app dev",
-		"dev:examples": "turbo run dev --filter=next-app --filter=vite-app --filter=next12-app --filter=next-turbo-app"
+		"dev:examples": "turbo run dev --filter=next-app --filter=vite-app --filter=next12-app --filter=next-turbo-app",
+		"test": "pnpm --filter tailwindcss-atomic test",
+		"test:coverage": "pnpm --filter tailwindcss-atomic test:coverage"
 	},
 	"devDependencies": {
 		"@types/node": "^22.20.1",

@@ -10,7 +10,7 @@ Sirve con **PostCSS**, **Vite**, **Webpack**, **Rollup** y **Next.js**.
 pnpm add -D tailwindcss-atomic
 ```
 
-Peer: `postcss` ≥ 8. Node.js ≥ 22.18.0. Webpack ≥ 5 es opcional (solo si usas ese bundler).
+Peer: `postcss` ≥ 8. Node.js ≥ 22.18.0. Webpack ≥ 5 es opcional (solo si usas ese bundler). `sass` es peer opcional: hace falta para warmup de entradas `.scss` / `.sass` con `@use` locales.
 
 ## Cómo encaja en el pipeline
 
@@ -59,6 +59,47 @@ export default withTailwindAtomic(nextConfig);
 ```
 
 Hay un ejemplo en `app/next-app` (`pnpm dev`, puerto 3016).
+
+## Next.js 15 + Tailwind 3 + SCSS
+
+Tailwind v3 no expande `@use 'tailwindcss/utilities'`; espera `@tailwind utilities`. Si la entrada es SCSS (por ejemplo `scss/styles.scss` importada desde `app/layout.tsx`) el warmup **normaliza** esas capas y, si está instalado `sass`, compila los `@use` locales antes de PostCSS. Así el mapa `flex` → `_xxxxxx` existe **antes** de que Webpack transforme los bundles de App Router (client, SSR y RSC).
+
+```scss
+// scss/styles.scss
+@use 'tailwindcss/base';
+@use 'tailwindcss/components';
+@use 'tailwindcss/utilities';
+@use './themes/brand' as themes;
+```
+
+```ts
+// app/layout.tsx
+import "../scss/styles.scss";
+```
+
+```js
+// postcss.config.js — el plugin atomic va el último
+module.exports = {
+	plugins: {
+		"postcss-import": {},
+		"tailwindcss/nesting": {},
+		tailwindcss: {},
+		autoprefixer: {},
+		"tailwindcss-atomic/postcss": {},
+	},
+};
+```
+
+```ts
+// next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({reactStrictMode: true});
+```
+
+`withTailwindAtomic` inyecta el loader de Webpack (pre) y el plugin que, en `processAssets`, atomiciza **todo** el CSS y después reescribe **todo** el JS (incluidos chunks de servidor). En `next dev` invalida módulos JS cuando cambia el mapa.
+
+El path clásico `app/globals.css` con `@tailwind base/components/utilities` sigue igual.
 
 ## Next.js 15 + Turbopack
 

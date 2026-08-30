@@ -32,6 +32,7 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.classMap["__skip_warmup"] = "_skip";
 	ATOMIC_RUNTIME.viteServer = null;
 	ATOMIC_RUNTIME.projectRoots = [];
+	ATOMIC_RUNTIME.webpackWatchings.clear();
 	ATOMIC_RUNTIME.targetFunctions = new Set(DEFAULT_TARGET_FUNCTIONS);
 	delete process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
 	if (!fs.existsSync(loaderStubPath)) {

@@ -133,4 +133,20 @@ describe("invalidateJsModules", () => {
 		expect(invalidateModule).toHaveBeenCalledTimes(1);
 		expect(invalidateModule).toHaveBeenCalledWith({id: "src/app.tsx"});
 	});
+
+	it("invalidates webpack watchers in Next.js dev", () => {
+		const invalidate = vi.fn();
+		ATOMIC_RUNTIME.webpackWatchings.add({invalidate});
+		invalidateJsModules();
+		expect(invalidate).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores webpack watchers whose invalidate throws", () => {
+		ATOMIC_RUNTIME.webpackWatchings.add({
+			invalidate() {
+				throw new Error("closed");
+			},
+		});
+		expect(() => invalidateJsModules()).not.toThrow();
+	});
 });

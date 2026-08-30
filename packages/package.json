@@ -106,9 +106,13 @@
 	},
 	"peerDependencies": {
 		"postcss": "^8.0.0",
+		"sass": ">=1.60",
 		"webpack": ">=5"
 	},
 	"peerDependenciesMeta": {
+		"sass": {
+			"optional": true
+		},
 		"webpack": {
 			"optional": true
 		}

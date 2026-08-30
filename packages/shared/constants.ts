@@ -24,6 +24,10 @@ interface ViteDevServerLike {
 	moduleGraph: ViteModuleGraph;
 }
 
+type WebpackWatchingLike = {
+	invalidate?: () => void;
+};
+
 const ATOMIC_RUNTIME_KEY = "__tailwindAtomicRuntime__";
 
 type AtomicRuntime = {
@@ -31,6 +35,7 @@ type AtomicRuntime = {
 	classMap: Record<string, string>;
 	targetFunctions: Set<string>;
 	projectRoots: string[];
+	webpackWatchings: Set<WebpackWatchingLike>;
 };
 
 function getAtomicRuntime(): AtomicRuntime {
@@ -43,9 +48,14 @@ function getAtomicRuntime(): AtomicRuntime {
 			classMap: Object.create(null),
 			targetFunctions: DEFAULT_TARGET_FUNCTIONS,
 			projectRoots: [],
+			webpackWatchings: new Set(),
 		};
 	}
-	return globalRef[ATOMIC_RUNTIME_KEY];
+	const runtime = globalRef[ATOMIC_RUNTIME_KEY];
+	if (!runtime.webpackWatchings) {
+		runtime.webpackWatchings = new Set();
+	}
+	return runtime;
 }
 
 const ATOMIC_RUNTIME = getAtomicRuntime();
@@ -64,6 +74,9 @@ const CSS_ENTRY_CANDIDATES = [
 	"scss/index.scss",
 	"scss/styles.scss",
 	"scss/globals.scss",
+	"app/styles.scss",
+	"src/app/styles.scss",
+	"src/styles.scss",
 ] as const;
 
 export {

@@ -1,5 +1,7 @@
 import factory, {transformAtomicSource} from "../core/factory";
 import {ATOMIC_RUNTIME} from "../shared/constants";
+import {applyAtomicCss} from "../shared/css";
+import {invalidateJsModules} from "../shared/js";
 
 type Plugin = ReturnType<typeof factory>;
 
@@ -366,5 +368,180 @@ describe("factory webpack hook", () => {
 		expect(updated["buffer.css"]).toContain("/*! tailwind-atomic */");
 		expect(updated["lib.mjs"]).toBeUndefined();
 		expect(updated["lib.cjs"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+	});
+
+	it("processes CSS before JS so a late class map still rewrites bundles", async () => {
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+		ATOMIC_RUNTIME.classMap["__skip_warmup"] = "_skip";
+		const plugin = createPlugin();
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string}>) => Promise<void>)
+			| undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		plugin.webpack({
+			context: "/tmp/app",
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		await processAssets?.({
+			"app/page.js": {source: () => `cn("flex")`},
+			"static/chunks/app/layout.js": {
+				source: () => `_jsx("div", { className: "relative flex flex-col p-4" })`,
+			},
+			"main.css": {
+				source: () =>
+					".flex { display: flex } .relative { position: relative } .flex-col { flex-direction: column } .p-4 { padding: 1rem }",
+			},
+		});
+
+		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(updated["app/page.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(updated["app/page.js"]).not.toContain("flex");
+		expect(updated["static/chunks/app/layout.js"]).toContain(
+			ATOMIC_RUNTIME.classMap["flex"],
+		);
+		expect(updated["static/chunks/app/layout.js"]).not.toMatch(
+			/\bflex-col\b/,
+		);
+	});
+
+	it("rehydrates an already-atomic CSS map before rewriting JS", async () => {
+		const {code} = applyAtomicCss(".flex { display: flex }");
+		const hashed = ATOMIC_RUNTIME.classMap["flex"];
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+		ATOMIC_RUNTIME.classMap["__skip_warmup"] = "_skip";
+
+		const plugin = createPlugin();
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string}>) => Promise<void>)
+			| undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		plugin.webpack({
+			context: "/tmp/next15",
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		await processAssets?.({
+			"server/app/page.js": {source: () => `cn("flex")`},
+			"app.css": {source: () => code},
+		});
+
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe(hashed);
+		expect(updated["server/app/page.js"]).toContain(hashed);
+		expect(updated["app.css"]).toBeUndefined();
+	});
+
+	it("registers webpack watching so JS invalidation works in Next dev", async () => {
+		const plugin = createPlugin();
+		const invalidate = vi.fn();
+		const watching = {invalidate};
+		let watchRun: ((compiler: {watching?: {invalidate?: () => void}}) => void) | undefined;
+		let watchClose: (() => void) | undefined;
+
+		plugin.webpack({
+			context: "/tmp/app",
+			watching,
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource: class {}},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				watchRun: {
+					tap(_name: string, fn: (compiler: {watching?: {invalidate?: () => void}}) => void) {
+						watchRun = fn;
+					},
+				},
+				watchClose: {
+					tap(_name: string, fn: () => void) {
+						watchClose = fn;
+					},
+				},
+				beforeCompile: {tapPromise() {}},
+				compilation: {tap() {}},
+			},
+		});
+
+		expect(ATOMIC_RUNTIME.webpackWatchings.has(watching)).toBe(true);
+		watchRun?.({watching});
+		invalidateJsModules();
+		expect(invalidate).toHaveBeenCalled();
+		watchClose?.();
+		expect(ATOMIC_RUNTIME.webpackWatchings.has(watching)).toBe(false);
 	});
 });

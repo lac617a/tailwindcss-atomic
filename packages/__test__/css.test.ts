@@ -9,6 +9,10 @@ import {
 	findNearestPackageDir,
 	isCssFile,
 	mergeClassMap,
+	normalizeTailwindSassDirectives,
+	prepareWarmupSource,
+	rehydrateClassMapFromCss,
+	stripSassModuleRules,
 	transformClassString,
 } from "../shared/css";
 import {wasmMock} from "./helpers";
@@ -93,6 +97,7 @@ describe("applyAtomicCss", () => {
 	it("leaves empty CSS, directives and already-atomic sheets alone", () => {
 		expect(applyAtomicCss("")).toEqual({code: "", changed: false});
 		expect(applyAtomicCss("@tailwind utilities;").changed).toBe(false);
+		expect(applyAtomicCss("@use 'tailwindcss/utilities';").changed).toBe(false);
 		expect(applyAtomicCss(`${ATOMIC_MARKER}\n._aaaaaa{display:flex}`).changed).toBe(
 			false,
 		);
@@ -102,6 +107,7 @@ describe("applyAtomicCss", () => {
 		const {code, changed} = applyAtomicCss(".flex { display: flex }");
 		expect(changed).toBe(true);
 		expect(code.startsWith(ATOMIC_MARKER)).toBe(true);
+		expect(code).toContain("/*! tailwind-atomic-map ");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 		expect(code).not.toContain(".flex {");
@@ -178,6 +184,26 @@ describe("applyAtomicCss", () => {
 	it("no-ops when there are no utility rules", () => {
 		const css = ":root { color: red }";
 		expect(applyAtomicCss(css)).toEqual({code: css, changed: false});
+	});
+
+	it("rehydrates the class map from an already-atomic sheet", () => {
+		const {code} = applyAtomicCss(".flex { display: flex }");
+		const hashed = ATOMIC_RUNTIME.classMap["flex"];
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+
+		const result = applyAtomicCss(code);
+		expect(result.changed).toBe(false);
+		expect(result.mapChanged).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe(hashed);
+	});
+
+	it("does not rehydrate when the atomic sheet has no map comment", () => {
+		const css = `${ATOMIC_MARKER}\n._aaaaaa{display:flex}`;
+		expect(applyAtomicCss(css)).toEqual({
+			code: css,
+			changed: false,
+			mapChanged: false,
+		});
 	});
 });
 
@@ -341,5 +367,144 @@ describe("CSS entry discovery", () => {
 				posix.parse,
 			),
 		).toBe("/app/src");
+	});
+});
+
+describe("SCSS Tailwind v3 warmup helpers", () => {
+	it("rewrites @use/@import/@reference of Tailwind layers to @tailwind", () => {
+		expect(normalizeTailwindSassDirectives("@use 'tailwindcss/base';")).toBe(
+			"@tailwind base;",
+		);
+		expect(
+			normalizeTailwindSassDirectives('@use "tailwindcss/components" as *;'),
+		).toBe("@tailwind components;");
+		expect(
+			normalizeTailwindSassDirectives("@use 'tailwindcss/utilities' as u;"),
+		).toBe("@tailwind utilities;");
+		expect(
+			normalizeTailwindSassDirectives('@import "tailwindcss/preflight";'),
+		).toBe("@tailwind base;");
+		expect(
+			normalizeTailwindSassDirectives('@reference "tailwindcss/utilities";'),
+		).toBe("@tailwind utilities;");
+	});
+
+	it("leaves Tailwind v4 @import and local CSS alone", () => {
+		expect(normalizeTailwindSassDirectives('@import "tailwindcss";')).toBe(
+			'@import "tailwindcss";',
+		);
+		expect(normalizeTailwindSassDirectives(".flex { display: flex }")).toBe(
+			".flex { display: flex }",
+		);
+	});
+
+	it("strips local Sass module rules that PostCSS cannot resolve", () => {
+		const css = `@tailwind utilities;\n@use './themes/brand' as themes;\n@forward './mixins';\n`;
+		expect(stripSassModuleRules(css)).toBe("@tailwind utilities;\n\n\n");
+	});
+
+	it("prepares SCSS entries without sass by normalizing and stripping", () => {
+		const prepared = prepareWarmupSource(
+			"/app/scss/styles.scss",
+			`@use 'tailwindcss/base';
+@use 'tailwindcss/components';
+@use 'tailwindcss/utilities';
+@use './themes/brand' as themes;
+`,
+			(id: string) => {
+				throw Object.assign(new Error(`Cannot find module '${id}'`), {
+					code: "MODULE_NOT_FOUND",
+				});
+			},
+		);
+		expect(prepared).toContain("@tailwind base;");
+		expect(prepared).toContain("@tailwind components;");
+		expect(prepared).toContain("@tailwind utilities;");
+		expect(prepared).not.toContain("@use");
+	});
+
+	it("compiles SCSS with sass when the optional peer is available", () => {
+		const prepared = prepareWarmupSource(
+			"/app/scss/styles.scss",
+			"@use 'tailwindcss/utilities';\n@use './themes/brand' as themes;\n",
+			(id: string) => {
+				if (id === "sass") {
+					return {
+						compileString(source: string) {
+							return {css: `${source}\n/* compiled */`};
+						},
+					};
+				}
+				throw new Error(`Cannot find module '${id}'`);
+			},
+		);
+		expect(prepared).toContain("@tailwind utilities;");
+		expect(prepared).toContain("/* compiled */");
+		expect(prepared).not.toContain("@use");
+	});
+
+	it("uses sass-embedded when sass is missing", () => {
+		const prepared = prepareWarmupSource(
+			"/app/scss/styles.scss",
+			"@use 'tailwindcss/utilities';\n",
+			(id: string) => {
+				if (id === "sass") throw new Error("missing");
+				if (id === "sass-embedded") {
+					return {
+						default: {
+							compileString(source: string) {
+								return {css: source};
+							},
+						},
+					};
+				}
+				throw new Error(`Cannot find module '${id}'`);
+			},
+		);
+		expect(prepared).toContain("@tailwind utilities;");
+	});
+
+	it("skips Sass compilation for plain CSS entries", () => {
+		const compileString = vi.fn();
+		const prepared = prepareWarmupSource(
+			"/app/app/globals.css",
+			"@tailwind utilities;",
+			(id: string) => {
+				if (id === "sass") return {compileString};
+				throw new Error(`Cannot find module '${id}'`);
+			},
+		);
+		expect(compileString).not.toHaveBeenCalled();
+		expect(prepared).toBe("@tailwind utilities;");
+	});
+
+	it("falls back when Sass compile throws", () => {
+		const prepared = prepareWarmupSource(
+			"/app/scss/styles.scss",
+			"@use 'tailwindcss/utilities';\n@use './broken' as x;\n",
+			(id: string) => {
+				if (id === "sass") {
+					return {
+						compileString() {
+							throw new Error("sass boom");
+						},
+					};
+				}
+				throw new Error(`Cannot find module '${id}'`);
+			},
+		);
+		expect(prepared).toContain("@tailwind utilities;");
+		expect(prepared).not.toContain("@use");
+	});
+
+	it("rehydrates a serialized class map from CSS comments", () => {
+		const {code} = applyAtomicCss(".p-4 { padding: 1rem }");
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+		expect(rehydrateClassMapFromCss(code)).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(rehydrateClassMapFromCss("._aaaaaa{}")).toBe(false);
+		expect(rehydrateClassMapFromCss("/*! tailwind-atomic-map not-base64 */")).toBe(
+			false,
+		);
 	});
 });

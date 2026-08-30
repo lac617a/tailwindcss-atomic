@@ -28,12 +28,22 @@ function isJsFile(id: string) {
 
 function invalidateJsModules() {
 	const server = ATOMIC_RUNTIME.viteServer;
-	if (!server?.moduleGraph) return;
+	if (server?.moduleGraph) {
+		for (const [id, mod] of server.moduleGraph.idToModuleMap) {
+			if (!mod) continue;
+			if (!isJsFile(id)) continue;
+			server.moduleGraph.invalidateModule(mod);
+		}
+	}
 
-	for (const [id, mod] of server.moduleGraph.idToModuleMap) {
-		if (!mod) continue;
-		if (!isJsFile(id)) continue;
-		server.moduleGraph.invalidateModule(mod);
+	for (const watching of ATOMIC_RUNTIME.webpackWatchings) {
+		if (typeof watching.invalidate === "function") {
+			try {
+				watching.invalidate();
+			} catch {
+				// Watcher already closed.
+			}
+		}
 	}
 }
 

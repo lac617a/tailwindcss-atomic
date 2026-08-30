@@ -55,6 +55,15 @@ function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
 	}
 }
 
+function assetText(asset: {source: () => string | {toString(): string}}) {
+	const source = asset.source();
+	return typeof source === "string" ? source : source.toString();
+}
+
+function isJsAssetName(fileName: string) {
+	return /\.[cm]?js$/.test(fileName);
+}
+
 const factory: UnpluginFactory<{
 	targetFunctions?: Set<string>;
 	tailwindCss?: string;
@@ -150,6 +159,27 @@ const factory: UnpluginFactory<{
 				ATOMIC_RUNTIME.projectRoots.push(compiler.context);
 			}
 
+			const watching = (
+				compiler as {watching?: {invalidate?: () => void}}
+			).watching;
+			if (watching) {
+				ATOMIC_RUNTIME.webpackWatchings.add(watching);
+			}
+
+			compiler.hooks.watchRun?.tap("tailwind-atomic-plugin", (watchCompiler) => {
+				const next =
+					(watchCompiler as {watching?: {invalidate?: () => void}})
+						.watching ??
+					(compiler as {watching?: {invalidate?: () => void}}).watching;
+				if (next) ATOMIC_RUNTIME.webpackWatchings.add(next);
+			});
+
+			compiler.hooks.watchClose?.tap("tailwind-atomic-plugin", () => {
+				const current = (compiler as {watching?: {invalidate?: () => void}})
+					.watching;
+				if (current) ATOMIC_RUNTIME.webpackWatchings.delete(current);
+			});
+
 			compiler.hooks.beforeCompile.tapPromise(
 				"tailwind-atomic-plugin",
 				async () => {
@@ -198,27 +228,35 @@ const factory: UnpluginFactory<{
 						},
 						async (assets) => {
 							await warmupClassMapFromCss();
-							for (const [fileName, asset] of Object.entries(assets)) {
-								const source = asset.source();
-								const text =
-									typeof source === "string" ? source : source.toString();
 
-								if (fileName.endsWith(".css")) {
-									const {code, changed} = applyAtomicCss(text);
-									if (changed) {
-										compilation.updateAsset(fileName, new RawSource(code));
-									}
-									continue;
+							const cssFiles: string[] = [];
+							const jsFiles: string[] = [];
+							for (const fileName of Object.keys(assets)) {
+								if (fileName.endsWith(".css")) cssFiles.push(fileName);
+								else if (isJsAssetName(fileName)) jsFiles.push(fileName);
+							}
+
+							for (const fileName of cssFiles) {
+								const asset = assets[fileName];
+								if (!asset) continue;
+								const {code, changed} = applyAtomicCss(assetText(asset));
+								if (changed) {
+									compilation.updateAsset(fileName, new RawSource(code));
 								}
+							}
 
-								if (/\.[cm]?js$/.test(fileName)) {
-									const result = transformJs(text, targetFunctions);
-									if (result.code) {
-										compilation.updateAsset(
-											fileName,
-											new RawSource(result.code),
-										);
-									}
+							for (const fileName of jsFiles) {
+								const asset = assets[fileName];
+								if (!asset) continue;
+								const result = transformJs(
+									assetText(asset),
+									targetFunctions,
+								);
+								if (result.code) {
+									compilation.updateAsset(
+										fileName,
+										new RawSource(result.code),
+									);
 								}
 							}
 						},

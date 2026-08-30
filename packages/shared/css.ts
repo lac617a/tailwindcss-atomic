@@ -1,5 +1,7 @@
 import postcss from "postcss";
 import {createRequire} from "node:module";
+import path from "node:path";
+import {pathToFileURL} from "node:url";
 import type {
 	ChildNode,
 	Root as PostcssRoot,
@@ -17,12 +19,156 @@ import {
 import {process_tailwind_css} from "../core/wasm";
 import postcssTailwindAtomic from "../postcss";
 
+const ATOMIC_MAP_COMMENT_RE =
+	/\/\*! tailwind-atomic-map\s+([A-Za-z0-9+/]+=*)\s*\*\//;
+
+const TAILWIND_SASS_LAYER_RE =
+	/@(?:use|import|reference)\s+(['"])tailwindcss\/(base|components|utilities|preflight)\1(?:\s+as\s+(?:\*|[\w-]+))?\s*;?/gi;
+
+const SASS_MODULE_RULE_RE = /@(?:use|forward)\s+[^;]*;/g;
+
+type NodeRequireLike = (id: string) => unknown;
+
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);
 }
 
 function isAlreadyAtomic(css: string) {
 	return css.includes(ATOMIC_MARKER);
+}
+
+function isSassFile(cssPath: string) {
+	const clean = cssPath.split("?")[0] ?? "";
+	return /\.s[ac]ss$/i.test(clean);
+}
+
+/**
+ * Tailwind v3 no expande `@use 'tailwindcss/utilities'`; espera `@tailwind utilities`.
+ * Lo mismo para `@import` / `@reference` de las capas clásicas.
+ */
+function normalizeTailwindSassDirectives(css: string) {
+	TAILWIND_SASS_LAYER_RE.lastIndex = 0;
+	return css.replace(TAILWIND_SASS_LAYER_RE, (_match, _quote, layer) => {
+		const name = String(layer).toLowerCase();
+		if (name === "preflight" || name === "base") return "@tailwind base;";
+		return `@tailwind ${name};`;
+	});
+}
+
+function stripSassModuleRules(css: string) {
+	SASS_MODULE_RULE_RE.lastIndex = 0;
+	return css.replace(SASS_MODULE_RULE_RE, "");
+}
+
+function loadSass(appRequire: NodeRequireLike) {
+	try {
+		return appRequire("sass") as {
+			compileString?: (
+				src: string,
+				opts?: unknown,
+			) => {css?: string | {toString(): string}};
+			default?: {
+				compileString?: (
+					src: string,
+					opts?: unknown,
+				) => {css?: string | {toString(): string}};
+			};
+		};
+	} catch {
+		try {
+			return appRequire("sass-embedded") as {
+				compileString?: (
+					src: string,
+					opts?: unknown,
+				) => {css?: string | {toString(): string}};
+				default?: {
+					compileString?: (
+						src: string,
+						opts?: unknown,
+					) => {css?: string | {toString(): string}};
+				};
+			};
+		} catch {
+			return undefined;
+		}
+	}
+}
+
+function tryCompileSass(
+	cssPath: string,
+	source: string,
+	appRequire: NodeRequireLike,
+) {
+	if (!isSassFile(cssPath)) return source;
+
+	const sassMod = loadSass(appRequire);
+	const compileString =
+		sassMod?.compileString ?? sassMod?.default?.compileString;
+	if (typeof compileString !== "function") return source;
+
+	try {
+		const result = compileString(source, {
+			url: pathToFileURL(cssPath),
+			loadPaths: [path.dirname(cssPath)],
+			quietDeps: true,
+		});
+		if (result?.css != null) return String(result.css);
+	} catch {
+		// Peer opcional: si Sass no resuelve, seguimos con el CSS normalizado.
+	}
+
+	return source;
+}
+
+function prepareWarmupSource(
+	cssPath: string,
+	source: string,
+	appRequire: NodeRequireLike,
+) {
+	const normalized = normalizeTailwindSassDirectives(source);
+	const compiled = tryCompileSass(cssPath, normalized, appRequire);
+	return stripSassModuleRules(compiled);
+}
+
+function encodeClassMap(classMap: Record<string, string>) {
+	return Buffer.from(JSON.stringify(toPlainMap(classMap)), "utf8").toString(
+		"base64",
+	);
+}
+
+function formatAtomicCss(rootCss: string) {
+	const plain = toPlainMap(ATOMIC_RUNTIME.classMap);
+	if (!Object.keys(plain).length) {
+		return `${ATOMIC_MARKER}\n${rootCss}`;
+	}
+	return `${ATOMIC_MARKER}\n/*! tailwind-atomic-map ${encodeClassMap(plain)} */\n${rootCss}`;
+}
+
+function rehydrateClassMapFromCss(css: string) {
+	ATOMIC_MAP_COMMENT_RE.lastIndex = 0;
+	const match = ATOMIC_MAP_COMMENT_RE.exec(css);
+	if (!match?.[1]) return false;
+	try {
+		const json = Buffer.from(match[1], "base64").toString("utf8");
+		const parsed = JSON.parse(json) as unknown;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return false;
+		}
+		return mergeClassMap(parsed as Record<string, string>);
+	} catch {
+		return false;
+	}
+}
+
+function classMapChangedSince(prev: Record<string, string>) {
+	const next = ATOMIC_RUNTIME.classMap;
+	for (const key of Object.keys(next)) {
+		if (prev[key] !== next[key]) return true;
+	}
+	for (const key of Object.keys(prev)) {
+		if (!(key in next)) return true;
+	}
+	return false;
 }
 
 function flattenLayerAtRules(root: PostcssRoot) {
@@ -121,11 +267,21 @@ function transformClassString(
  * para que funcionen colores de Tailwind v3, v4 y SCSS.
  */
 function applyAtomicCss(css: string) {
-	if (!css || isAlreadyAtomic(css) || hasTailwindDirectives(css)) {
+	if (!css) {
+		return {code: css, changed: false};
+	}
+
+	if (isAlreadyAtomic(css)) {
+		const mapChanged = rehydrateClassMapFromCss(css);
+		return {code: css, changed: false, mapChanged};
+	}
+
+	if (hasTailwindDirectives(css)) {
 		return {code: css, changed: false};
 	}
 
 	try {
+		const prev = {...ATOMIC_RUNTIME.classMap};
 		const root = postcss.parse(css);
 		flattenLayerAtRules(root);
 		const changed = atomicizeContainer(root);
@@ -133,10 +289,11 @@ function applyAtomicCss(css: string) {
 			return {code: css, changed: false};
 		}
 
+		const mapChanged = classMapChangedSince(prev);
 		return {
-			code: `${ATOMIC_MARKER}\n${root.toString()}`,
+			code: formatAtomicCss(root.toString()),
 			changed: true,
-			mapChanged: true,
+			mapChanged,
 		};
 	} catch {
 		return {code: css, changed: false};
@@ -292,13 +449,17 @@ async function runWarmup() {
 	);
 	const source = readFileSync(cssPath, "utf8");
 	const appRequire = createRequire(join(pkgDir, "package.json"));
+	const prepared = prepareWarmupSource(cssPath, source, appRequire);
 	const plugins = [];
 	try {
 		const loadConfig = appRequire("postcss-load-config");
 		const loaded = await loadConfig({}, pkgDir);
 		if (Array.isArray(loaded?.plugins) && loaded.plugins.length) {
-			await postcss(loaded.plugins).process(source, {from: cssPath});
-			return;
+			await postcss(loaded.plugins).process(prepared, {from: cssPath});
+			if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
+			// Config ran but Tailwind no expandió (p.ej. @use sin normalizar).
+			// Si ya no quedan directivas, no rehacemos el pipeline.
+			if (!hasTailwindDirectives(prepared)) return;
 		}
 	} catch {
 		// El app puede no tener postcss-load-config; armamos el pipeline a mano.
@@ -322,7 +483,7 @@ async function runWarmup() {
 	}
 
 	plugins.push(postcssTailwindAtomic());
-	await postcss(plugins).process(source, {from: cssPath});
+	await postcss(plugins).process(prepared, {from: cssPath});
 }
 
 async function warmupClassMapFromCss() {
@@ -352,4 +513,8 @@ export {
 	collectSearchRoots,
 	findCssEntry,
 	findNearestPackageDir,
+	normalizeTailwindSassDirectives,
+	stripSassModuleRules,
+	prepareWarmupSource,
+	rehydrateClassMapFromCss,
 };

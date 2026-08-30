@@ -36,6 +36,8 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | `app/next12-app/` | Next.js 12 · Pages Router · Tailwind 3 |
 | `app/next-turbo-app/` | Next.js 15 · App Router · Turbopack |
 
+SCSS con `@use 'tailwindcss/base|components|utilities'` (Tailwind 3 + Next 15) está documentado en [`packages/README.md`](packages/README.md).
+
 La guía de uso de la librería está en [`packages/README.md`](packages/README.md).
 
 ## Requisitos

@@ -33,6 +33,34 @@ plugin.postcss = true;
 module.exports = plugin;
 `;
 
+const expandingTailwindPlugin = `"use strict";
+function plugin() {
+	return {
+		postcssPlugin: "tailwindcss",
+		Once(root) {
+			let saw = false;
+			root.walkAtRules("tailwind", () => {
+				saw = true;
+			});
+			if (!saw) return;
+			root.removeAll();
+			root.append(".flex { display: flex }");
+			root.append(".relative { position: relative }");
+			root.append(".flex-col { flex-direction: column }");
+			root.append(".p-6 { padding: 1.5rem }");
+		},
+	};
+}
+plugin.postcss = true;
+module.exports = plugin;
+`;
+
+const scssEntry = `@use 'tailwindcss/base';
+@use "tailwindcss/components";
+@use 'tailwindcss/utilities';
+@use './themes/brand' as themes;
+`;
+
 const fixtures: string[] = [];
 
 function writeModule(root: string, id: string, source: string) {
@@ -45,17 +73,28 @@ function writeModule(root: string, id: string, source: string) {
 	fs.writeFileSync(path.join(dir, "index.js"), source);
 }
 
-function makeApp(options: {
-	modules?: Record<string, string>;
-	skipPackageJson?: boolean;
-} = {}) {
+function makeApp(
+	options: {
+		modules?: Record<string, string>;
+		skipPackageJson?: boolean;
+		skipDefaultCss?: boolean;
+		cssEntry?: {rel: string; source: string};
+	} = {},
+) {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "atomic-warmup-"));
 	fixtures.push(root);
-	fs.mkdirSync(path.join(root, "app"), {recursive: true});
-	fs.writeFileSync(
-		path.join(root, "app/globals.css"),
-		".flex { display: flex }",
-	);
+	if (!options.skipDefaultCss) {
+		fs.mkdirSync(path.join(root, "app"), {recursive: true});
+		fs.writeFileSync(
+			path.join(root, "app/globals.css"),
+			".flex { display: flex }",
+		);
+	}
+	if (options.cssEntry) {
+		const abs = path.join(root, options.cssEntry.rel);
+		fs.mkdirSync(path.dirname(abs), {recursive: true});
+		fs.writeFileSync(abs, options.cssEntry.source);
+	}
 	if (!options.skipPackageJson) {
 		fs.writeFileSync(
 			path.join(root, "package.json"),
@@ -187,5 +226,75 @@ module.exports = async () => ({plugins: []});
 		pointAt(root);
 		const warmup = await getWarmup();
 		await expect(warmup()).resolves.toBeUndefined();
+	});
+
+	it("warms the class map from SCSS @use tailwindcss layers (Next 15 + Tailwind 3)", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {tailwindcss: expandingTailwindPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("still warms from app/globals.css with @tailwind directives", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "app/globals.css",
+				source: "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
+			},
+			modules: {tailwindcss: expandingTailwindPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("compiles local SCSS @use via optional sass before PostCSS", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {
+				tailwindcss: expandingTailwindPlugin,
+				sass: `"use strict";
+module.exports = {
+	compileString(source) {
+		return {
+			css: source.replace(/@use\\s+['"]\\.\\/themes\\/[^'"]+['"][^;]*;/g, "/* local */"),
+		};
+	},
+};
+`,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("falls through postcss-load-config when @use did not populate the map", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {
+				"postcss-load-config": `"use strict";
+const plugin = () => ({postcssPlugin: "from-config", Once() {}});
+plugin.postcss = true;
+module.exports = async () => ({plugins: [plugin]});
+`,
+				tailwindcss: expandingTailwindPlugin,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 	});
 });

@@ -118,6 +118,8 @@ describe("factory plugin", () => {
 		await plugin.buildStart();
 		plugin.vite.configResolved({root: "/tmp/project"});
 		expect(ATOMIC_RUNTIME.projectRoots[0]).toBe("/tmp/project");
+		plugin.vite.configResolved({});
+		expect(ATOMIC_RUNTIME.projectRoots[0]).toBe("/tmp/project");
 		const server = {moduleGraph: {idToModuleMap: new Map(), invalidateModule() {}}};
 		plugin.vite.configureServer(server);
 		expect(ATOMIC_RUNTIME.viteServer).toBe(server);
@@ -146,6 +148,44 @@ describe("factory plugin", () => {
 		plugin.rollup.generateBundle({}, bundle);
 		expect(String(bundle["main.css"]?.source)).toContain("/*! tailwind-atomic */");
 		expect(bundle["main.js"]?.code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+	});
+
+	it("leaves Rollup assets unchanged when nothing atomicizes", () => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const plugin = createPlugin();
+		const bundle = {
+			"main.css": {
+				type: "asset",
+				fileName: "main.css",
+				source: ":root { color: red }",
+			},
+			"main.js": {
+				type: "chunk",
+				fileName: "main.js",
+				code: `other("flex")`,
+			},
+			"note.txt": {
+				type: "asset",
+				fileName: "note.txt",
+				source: "hello",
+			},
+		};
+		plugin.rollup.generateBundle({}, bundle);
+		expect(bundle["main.css"]?.source).toBe(":root { color: red }");
+		expect(bundle["main.js"]?.code).toBe(`other("flex")`);
+	});
+
+	it("invalidates JS modules after CSS is atomicized", async () => {
+		const invalidateModule = vi.fn();
+		ATOMIC_RUNTIME.viteServer = {
+			moduleGraph: {
+				idToModuleMap: new Map([["src/app.tsx", {id: "src/app.tsx"}]]),
+				invalidateModule,
+			},
+		};
+		const plugin = createPlugin();
+		await plugin.transform(".flex { display: flex }", "app.css");
+		expect(invalidateModule).toHaveBeenCalled();
 	});
 });
 
@@ -248,5 +288,83 @@ describe("factory webpack hook", () => {
 		});
 		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
 		expect(updated["main.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+	});
+
+	it("skips webpack context and assets that do not need work", async () => {
+		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/already";
+		const plugin = createPlugin();
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string | {toString(): string}}>) => Promise<void>)
+			| undefined;
+		let loaderTap: ((ctx: unknown, module: unknown) => void) | undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		plugin.webpack({
+			context: "",
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {
+							loader: {
+								tap(_name: string, fn: (ctx: unknown, module: unknown) => void) {
+									loaderTap = fn;
+								},
+							},
+						};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string | {toString(): string}}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		expect(ATOMIC_RUNTIME.projectRoots).not.toContain("");
+		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe("/already");
+
+		loaderTap?.({}, {resource: "/tmp/app.css", loaders: []});
+		loaderTap?.({}, {
+			resource: "/tmp/App.tsx",
+			loaders: [{loader: 1}],
+		});
+
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		await processAssets?.({
+			"plain.css": {source: () => ":root { color: red }"},
+			"buffer.css": {
+				source: () => ({toString: () => ".flex { display: flex }"}),
+			},
+			"lib.mjs": {source: () => `other("flex")`},
+			"lib.cjs": {source: () => `cn("flex")`},
+		});
+		expect(updated["plain.css"]).toBeUndefined();
+		expect(updated["buffer.css"]).toContain("/*! tailwind-atomic */");
+		expect(updated["lib.mjs"]).toBeUndefined();
+		expect(updated["lib.cjs"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 	});
 });

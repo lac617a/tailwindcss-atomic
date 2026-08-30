@@ -41,15 +41,33 @@ describe("processArgument", () => {
 		expect(rewrite("`flex extra`")).toContain("_aaaaaa extra");
 	});
 
+	it("skips empty template quasis and still rewrites cooked values", () => {
+		const ast = parse("(`flex${x}`)", {sourceType: "module"});
+		const stmt = ast.program.body[0] as ExpressionStatement;
+		const tpl = stmt.expression as {quasis: {value: {raw: string; cooked: string | null}}[]};
+		const empty = tpl.quasis[1];
+		if (empty) empty.value.cooked = null;
+		processArgument(stmt.expression, classMap);
+		expect(generate(ast).code).toContain("_aaaaaa");
+	});
+
 	it("rewrites object keys (string and identifier)", () => {
 		const out = rewrite(`{ flex: true, "p-6": false }`);
 		expect(out).toContain("_aaaaaa");
 		expect(out).toContain("_bbbbbb");
 	});
 
+	it("ignores spreads and computed object keys", () => {
+		const out = rewrite(`{ ...extra, [dyn]: true, flex: true }`);
+		expect(out).toContain("_aaaaaa");
+		expect(out).toContain("...extra");
+		expect(out).toContain("[dyn]");
+	});
+
 	it("walks arrays, conditionals and logical expressions", () => {
-		expect(rewrite(`["flex", cond && "p-6"]`)).toContain("_aaaaaa");
+		expect(rewrite(`["flex", , cond && "p-6"]`)).toContain("_aaaaaa");
 		expect(rewrite(`cond ? "flex" : "hidden"`)).toMatch(/_aaaaaa[\s\S]*_cccccc/);
+		expect(rewrite(`cond ? 1 : "hidden"`)).toContain("_cccccc");
 		expect(rewrite(`cond && "p-6"`)).toContain("_bbbbbb");
 	});
 

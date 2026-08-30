@@ -75,11 +75,27 @@ describe("transformJs", () => {
 			_jsx("div", { className: "flex" });
 			_jsxs("div", { "className": "p-6" });
 			jsxDEV("div", { className: "flex" });
+			jsx("div", { ["className"]: "flex" });
+			jsx("div", { id: "flex", ...rest });
+			jsx("div", null);
 			`,
 			new Set(["cn"]),
 		);
 		expect(result.code).toContain("_aaaaaa");
 		expect(result.code).toContain("_bbbbbb");
+	});
+
+	it("ignores JSX attributes that are not className", () => {
+		const result = transformJs(
+			`export const n = <div id="flex" class="p-6" />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toBeNull();
+	});
+
+	it("rewrites member callees whose property is a target helper", () => {
+		const result = transformJs(`obj.cn("flex");`, new Set(["cn"]));
+		expect(result.code).toContain("_aaaaaa");
 	});
 
 	it("ignores helpers that are not in the target set", () => {

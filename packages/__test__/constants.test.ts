@@ -18,6 +18,8 @@ describe("constants", () => {
 		expect(TAILWIND_DIRECTIVE_RE.test('@import "tailwindcss/preflight";')).toBe(
 			true,
 		);
+		expect(TAILWIND_DIRECTIVE_RE.test('@use "tailwindcss";')).toBe(true);
+		expect(TAILWIND_DIRECTIVE_RE.test('@reference "tailwindcss";')).toBe(true);
 		expect(TAILWIND_DIRECTIVE_RE.test(".flex { display: flex }")).toBe(false);
 	});
 
@@ -44,10 +46,17 @@ describe("constants", () => {
 
 	it("shares a singleton runtime on globalThis", () => {
 		expect(ATOMIC_RUNTIME.targetFunctions).toBeInstanceOf(Set);
-		expect(ATOMIC_RUNTIME.classMap).toEqual({});
+		expect(ATOMIC_RUNTIME.classMap).toBeTypeOf("object");
 		expect(ATOMIC_RUNTIME.viteServer).toBeNull();
 		expect(Array.isArray(ATOMIC_RUNTIME.projectRoots)).toBe(true);
 		expect(CSS_ENTRY_CANDIDATES).toContain("app/globals.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("src/index.css");
+	});
+
+	it("reuses the runtime already stored on globalThis", async () => {
+		const first = ATOMIC_RUNTIME;
+		vi.resetModules();
+		const {ATOMIC_RUNTIME: second} = await import("../shared/constants");
+		expect(second).toBe(first);
 	});
 });

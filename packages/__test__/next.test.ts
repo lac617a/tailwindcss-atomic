@@ -57,4 +57,43 @@ describe("withTailwindAtomic", () => {
 		expect(result?.plugins).toHaveLength(1);
 		expect(result?.cache).toBeUndefined();
 	});
+
+	it("falls back to dist/loader.cjs when the source shim is missing", async () => {
+		const fs = await import("node:fs");
+		const path = await import("node:path");
+		const {fileURLToPath} = await import("node:url");
+		const packagesRoot = path.resolve(
+			fileURLToPath(new URL(".", import.meta.url)),
+			"..",
+		);
+		const sourceLoader = path.join(packagesRoot, "loader.cjs");
+		const distDir = path.join(packagesRoot, "dist");
+		const distLoader = path.join(distDir, "loader.cjs");
+		const hadSource = fs.existsSync(sourceLoader);
+		if (hadSource) fs.unlinkSync(sourceLoader);
+		fs.mkdirSync(distDir, {recursive: true});
+		if (!fs.existsSync(distLoader)) {
+			fs.writeFileSync(
+				distLoader,
+				`"use strict";\nmodule.exports = function () {};\n`,
+			);
+		}
+
+		try {
+			vi.resetModules();
+			const {withTailwindAtomic: fresh} = await import("../next");
+			const config = fresh();
+			const tsx = config.turbopack?.rules?.["*.tsx"] as {
+				default?: {loaders?: string[]};
+			};
+			expect(tsx.default?.loaders?.[0]?.replace(/\\/g, "/")).toMatch(
+				/loader\.cjs$/,
+			);
+		} finally {
+			fs.writeFileSync(
+				sourceLoader,
+				`"use strict";\nmodule.exports = function tailwindAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
+			);
+		}
+	});
 });

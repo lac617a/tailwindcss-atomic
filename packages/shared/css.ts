@@ -349,4 +349,7 @@ export {
 	atomicizeContainer,
 	transformClassString,
 	warmupClassMapFromCss,
+	collectSearchRoots,
+	findCssEntry,
+	findNearestPackageDir,
 };

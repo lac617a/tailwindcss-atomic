@@ -9,6 +9,7 @@ const DEFAULT_TARGET_FUNCTIONS = new Set([
 	"class",
 	"classnames",
 	"cn",
+	"cx",
 	"cva",
 	"tw",
 	"twMerge",

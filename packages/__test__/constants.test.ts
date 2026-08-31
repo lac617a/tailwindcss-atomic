@@ -49,6 +49,7 @@ describe("constants", () => {
 		expect(ATOMIC_RUNTIME.classMap).toBeTypeOf("object");
 		expect(ATOMIC_RUNTIME.viteServer).toBeNull();
 		expect(ATOMIC_RUNTIME.webpackWatchings).toBeInstanceOf(Set);
+		expect(ATOMIC_RUNTIME.transpilePackages).toBeInstanceOf(Set);
 		expect(Array.isArray(ATOMIC_RUNTIME.projectRoots)).toBe(true);
 		expect(CSS_ENTRY_CANDIDATES).toContain("app/globals.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("src/index.css");

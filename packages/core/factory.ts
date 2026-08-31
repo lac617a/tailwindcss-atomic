@@ -1,5 +1,4 @@
 import {UnpluginFactory} from "unplugin";
-import path from "node:path";
 
 import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "../shared/constants";
 
@@ -12,7 +11,7 @@ import {
 	applyAtomicCss,
 	warmupClassMapFromCss,
 } from "../shared/css";
-import {invalidateJsModules, isJsFile, transformJs} from "../shared/js";
+import {invalidateJsModules, isJsFile, shouldSkipJsTransform, transformJs} from "../shared/js";
 
 export async function transformAtomicSource(code: string, id: string) {
 	await warmupClassMapFromCss();
@@ -20,11 +19,7 @@ export async function transformAtomicSource(code: string, id: string) {
 
 	const cleanId = String(id).split("?")[0]?.replace(/\\/g, "/");
 
-	if (
-		!cleanId ||
-		cleanId.includes("node_modules") ||
-		cleanId.includes("/.next/")
-	) {
+	if (!cleanId || shouldSkipJsTransform(cleanId)) {
 		return {code: null, map: null};
 	}
 
@@ -67,11 +62,17 @@ function isJsAssetName(fileName: string) {
 const factory: UnpluginFactory<{
 	targetFunctions?: Set<string>;
 	tailwindCss?: string;
+	transpilePackages?: string[];
 }> = (options = {}) => {
 	const targetFunctions = new Set(
 		options.targetFunctions || DEFAULT_TARGET_FUNCTIONS,
 	);
 	ATOMIC_RUNTIME.targetFunctions = targetFunctions;
+	if (options.transpilePackages) {
+		for (const pkg of options.transpilePackages) {
+			ATOMIC_RUNTIME.transpilePackages.add(pkg);
+		}
+	}
 
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.
 	if (options.tailwindCss) {
@@ -101,11 +102,15 @@ const factory: UnpluginFactory<{
 			const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
 			if (!cleanId) return false;
 
-			if (cleanId.includes("node_modules") || cleanId.includes("/.next/")) {
-				return false;
+			if (isCssFile(cleanId)) {
+				return (
+					!cleanId.includes("/node_modules/") &&
+					!cleanId.includes("node_modules/") &&
+					!cleanId.includes("/.next/")
+				);
 			}
 
-			return isCssFile(cleanId) || isJsFile(cleanId);
+			return isJsFile(cleanId) && !shouldSkipJsTransform(cleanId);
 		},
 
 		async transform(code, id) {
@@ -199,10 +204,7 @@ const factory: UnpluginFactory<{
 						(_loaderContext, module) => {
 							const resource = module.resource;
 							if (!resource || !isJsFile(resource)) return;
-							if (
-								resource.includes("node_modules") ||
-								resource.includes(`${path.sep}.next${path.sep}`)
-							) {
+							if (shouldSkipJsTransform(resource)) {
 								return;
 							}
 
@@ -229,6 +231,8 @@ const factory: UnpluginFactory<{
 						async (assets) => {
 							await warmupClassMapFromCss();
 
+							// CSS first so the class map is complete (and rehydrated
+							// from already-atomic chunks) before any SSR/RSC JS rewrite.
 							const cssFiles: string[] = [];
 							const jsFiles: string[] = [];
 							for (const fileName of Object.keys(assets)) {

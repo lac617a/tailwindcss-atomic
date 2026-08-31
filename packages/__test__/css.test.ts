@@ -62,6 +62,16 @@ describe("transformClassString", () => {
 			}),
 		).toBe("_cccccc");
 	});
+
+	it("looks up important, stripped pseudos and case-insensitive hex", () => {
+		expect(
+			transformClassString("!px-4 disabled:py-2 fill-[#069BE8]", {
+				"!px-4": "_imp001",
+				"disabled:py-2": "_dis001",
+				"fill-[#069be8]": "_hex001",
+			}),
+		).toBe("_imp001 _dis001 _hex001");
+	});
 });
 
 describe("mergeClassMap", () => {
@@ -91,6 +101,15 @@ describe("mergeClassMap", () => {
 	it("unescapes CSS class names from the compiler", () => {
 		expect(mergeClassMap({"hover\\:flex": "_dddddd"})).toBe(true);
 		expect(ATOMIC_RUNTIME.classMap["hover:flex"]).toBe("_dddddd");
+	});
+
+	it("normalizes important, trailing variant pseudos and hex case", () => {
+		expect(mergeClassMap({"\\!px-4": "_imp001"})).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["!px-4"]).toBe("_imp001");
+		expect(mergeClassMap({"disabled:py-2:disabled": "_dis001"})).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["disabled:py-2"]).toBe("_dis001");
+		expect(mergeClassMap({"fill-[#069BE8]": "_hex001"})).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["fill-[#069be8]"]).toBe("_hex001");
 	});
 });
 
@@ -238,7 +257,6 @@ describe("applyAtomicCss", () => {
 		const css = `
 html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surface-general-100); }
 .pokerenchile .pattern-background::before { content: ""; background: var(--pattern-background); }
-.app-layout { display: flex; gap: 1rem; }
 .flex { display: flex; }
 `;
 		const {code, changed} = applyAtomicCss(css);
@@ -246,9 +264,7 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(code).toContain("html:root");
 		expect(code).toContain("[data-theme]");
 		expect(code).toContain(".pokerenchile .pattern-background::before");
-		expect(code).toContain(".app-layout");
 		expect(ATOMIC_RUNTIME.classMap["pattern-background"]).toBeUndefined();
-		expect(ATOMIC_RUNTIME.classMap["app-layout"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 	});
@@ -293,6 +309,57 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(code).toContain(".pattern-background::before");
 		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("atomicizes multi-decl spacing utilities and maps them", () => {
+		const css = `
+.py-2 { padding-top: .5rem; padding-bottom: .5rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.flex { display: flex; }
+.sm\\:px-4 { padding-left: 1rem; padding-right: 1rem; }
+.\\!px-4 { padding-left: 1rem !important; padding-right: 1rem !important; }
+.pokerenchile { --color-red-600: #bc0000; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["py-2"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["px-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["mx-auto"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["sm:px-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["!px-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".py-2");
+		expect(code).not.toContain(".px-4");
+		expect(code).not.toContain(".mx-auto");
+		expect(code).toMatch(/\.pokerenchile\s*\{[^}]*--color-red-600:\s*#bc0000/);
+		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
+
+		const rewritten = transformClassString(
+			"flex py-2 px-4 mx-auto",
+			ATOMIC_RUNTIME.classMap,
+		);
+		expect(rewritten).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(rewritten).toContain(ATOMIC_RUNTIME.classMap["py-2"]);
+		expect(rewritten).toContain(ATOMIC_RUNTIME.classMap["px-4"]);
+		expect(rewritten).toContain(ATOMIC_RUNTIME.classMap["mx-auto"]);
+		expect(rewritten).not.toMatch(/\b(flex|py-2|px-4|mx-auto)\b/);
+	});
+
+	it("dedupes identical hashed rules inside one stylesheet", () => {
+		const css = `
+.top-0 { top: 0; }
+.top-0 { top: 0; }
+@media (min-width: 640px) {
+  .sm\\:top-0 { top: 0; }
+}
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		const hashed = ATOMIC_RUNTIME.classMap["top-0"];
+		expect(hashed).toMatch(/^_[0-9a-f]{6}$/);
+		const matches = code.match(new RegExp(`\\.${hashed}\\s*\\{\\s*top:\\s*0`, "g"));
+		expect(matches?.length).toBe(1);
 	});
 
 	it("rehydrates the class map from an already-atomic sheet", () => {
@@ -342,6 +409,18 @@ describe("isUtilityRule", () => {
 				".placeholder-gray-400::placeholder { color: #9ca3af }",
 			),
 		).toBe(true);
+		expect(
+			firstRule(".py-2 { padding-top: .5rem; padding-bottom: .5rem }"),
+		).toBe(true);
+		expect(
+			firstRule(".px-4 { padding-left: 1rem; padding-right: 1rem }"),
+		).toBe(true);
+		expect(
+			firstRule(".mx-auto { margin-left: auto; margin-right: auto }"),
+		).toBe(true);
+		expect(
+			firstRule(".\\!px-4 { padding-left: 1rem !important; padding-right: 1rem !important }"),
+		).toBe(true);
 	});
 
 	it("rejects theme tokens, component selectors and document roots", () => {
@@ -353,9 +432,6 @@ describe("isUtilityRule", () => {
 		).toBe(false);
 		expect(
 			firstRule(".pokerenchile .child { color: red }"),
-		).toBe(false);
-		expect(
-			firstRule(".app-layout { display: flex; gap: 1rem }"),
 		).toBe(false);
 		expect(
 			firstRule("html.pokerenchile { --color-red-600: #bc0000 }"),

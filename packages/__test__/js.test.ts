@@ -1,5 +1,11 @@
 import {ATOMIC_RUNTIME} from "../shared/constants";
-import {invalidateJsModules, isJsFile, transformJs} from "../shared/js";
+import {
+	clearLinkedPackageCache,
+	invalidateJsModules,
+	isJsFile,
+	shouldSkipJsTransform,
+	transformJs,
+} from "../shared/js";
 
 describe("isJsFile", () => {
 	it("accepts JS/TS extensions and query strings", () => {
@@ -15,6 +21,38 @@ describe("isJsFile", () => {
 		expect(isJsFile("app.css")).toBe(false);
 		expect(isJsFile("")).toBe(false);
 		expect(isJsFile("?")).toBe(false);
+	});
+});
+
+describe("shouldSkipJsTransform", () => {
+	it("skips bundler output and foreign node_modules", () => {
+		expect(shouldSkipJsTransform("")).toBe(true);
+		expect(shouldSkipJsTransform("app/.next/server/app/page.js")).toBe(true);
+		expect(shouldSkipJsTransform("node_modules/react/index.js")).toBe(true);
+		expect(shouldSkipJsTransform("/tmp/app/node_modules/clsx/clsx.js")).toBe(
+			true,
+		);
+	});
+
+	it("keeps app source and transpilePackages / workspace design systems", () => {
+		expect(shouldSkipJsTransform("src/app.tsx")).toBe(false);
+		expect(shouldSkipJsTransform("packages/ui/button.tsx")).toBe(false);
+		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
+		expect(
+			shouldSkipJsTransform("node_modules/ui-latamwin/dist/Button.js"),
+		).toBe(false);
+		expect(
+			shouldSkipJsTransform(
+				"/repo/node_modules/@webs/latamwin/dist/index.js",
+			),
+		).toBe(true);
+		ATOMIC_RUNTIME.transpilePackages.add("@webs/latamwin");
+		expect(
+			shouldSkipJsTransform(
+				"/repo/node_modules/@webs/latamwin/dist/index.js",
+			),
+		).toBe(false);
+		clearLinkedPackageCache();
 	});
 });
 
@@ -96,6 +134,21 @@ describe("transformJs", () => {
 	it("rewrites member callees whose property is a target helper", () => {
 		const result = transformJs(`obj.cn("flex");`, new Set(["cn"]));
 		expect(result.code).toContain("_aaaaaa");
+	});
+
+	it("rewrites cva variant values so classNames are not left half-hashed", () => {
+		const result = transformJs(
+			`
+			cva("flex", {
+				variants: { size: { md: "p-6 hidden" } }
+			});
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).not.toMatch(/\bp-6\b/);
 	});
 
 	it("ignores helpers that are not in the target set", () => {

@@ -57,6 +57,15 @@ describe("transformAtomicSource", () => {
 		);
 		expect(result.code).toContain("_aaaaaa");
 	});
+
+	it("rewrites transpilePackages under node_modules", async () => {
+		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
+		const result = await transformAtomicSource(
+			`export const n = <div className="flex" />;`,
+			"node_modules/ui-latamwin/dist/Button.js",
+		);
+		expect(result.code).toContain("_aaaaaa");
+	});
 });
 
 describe("factory plugin", () => {
@@ -85,6 +94,14 @@ describe("factory plugin", () => {
 		expect(plugin.transformInclude("src/app.tsx")).toBe(true);
 		expect(plugin.transformInclude("src/index.css")).toBe(true);
 		expect(plugin.transformInclude("src/Button.module.css")).toBe(false);
+
+		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
+		expect(
+			plugin.transformInclude("node_modules/ui-latamwin/dist/Button.js"),
+		).toBe(true);
+		expect(plugin.transformInclude("node_modules/ui-latamwin/styles.css")).toBe(
+			false,
+		);
 	});
 
 	it("skips Vite-injected CSS and atomicizes real stylesheets", async () => {
@@ -214,6 +231,10 @@ describe("factory webpack hook", () => {
 			resource: "/tmp/app/node_modules/pkg.js",
 			loaders: [] as {loader: string}[],
 		};
+		const designSystem = {
+			resource: "/tmp/app/node_modules/ui-latamwin/dist/Button.js",
+			loaders: [] as {loader: string}[],
+		};
 		const nextInternal = {
 			resource: `/tmp/app${"\\"}`.concat(".next\\file.js"),
 			loaders: [] as {loader: string}[],
@@ -279,6 +300,12 @@ describe("factory webpack hook", () => {
 		loaderTap?.({}, nextInternal);
 		loaderTap?.({}, {resource: "", loaders: []});
 		expect(skipped.loaders).toHaveLength(0);
+
+		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
+		loaderTap?.({}, designSystem);
+		expect(designSystem.loaders[0]?.loader.replace(/\\/g, "/")).toMatch(
+			/loader\.cjs$/,
+		);
 
 		await processAssets?.({
 			"main.css": {source: () => ".flex { display: flex }"},
@@ -423,14 +450,21 @@ describe("factory webpack hook", () => {
 			"static/chunks/app/layout.js": {
 				source: () => `_jsx("div", { className: "relative flex flex-col p-4" })`,
 			},
+			"server/app/page.js": {
+				source: () =>
+					`_jsx("div", { className: "flex py-2 px-4 mx-auto" })`,
+			},
 			"main.css": {
 				source: () =>
-					".flex { display: flex } .relative { position: relative } .flex-col { flex-direction: column } .p-4 { padding: 1rem }",
+					".flex { display: flex } .relative { position: relative } .flex-col { flex-direction: column } .p-4 { padding: 1rem } .py-2 { padding-top: .5rem; padding-bottom: .5rem } .px-4 { padding-left: 1rem; padding-right: 1rem } .mx-auto { margin-left: auto; margin-right: auto }",
 			},
 		});
 
 		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["py-2"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["px-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["mx-auto"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(updated["app/page.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 		expect(updated["app/page.js"]).not.toContain("flex");
 		expect(updated["static/chunks/app/layout.js"]).toContain(
@@ -439,6 +473,13 @@ describe("factory webpack hook", () => {
 		expect(updated["static/chunks/app/layout.js"]).not.toMatch(
 			/\bflex-col\b/,
 		);
+		expect(updated["server/app/page.js"]).toContain(
+			ATOMIC_RUNTIME.classMap["py-2"],
+		);
+		expect(updated["server/app/page.js"]).toContain(
+			ATOMIC_RUNTIME.classMap["px-4"],
+		);
+		expect(updated["server/app/page.js"]).not.toMatch(/\b(py-2|px-4|mx-auto)\b/);
 	});
 
 	it("rehydrates an already-atomic CSS map before rewriting JS", async () => {

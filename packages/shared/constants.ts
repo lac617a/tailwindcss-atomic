@@ -36,6 +36,7 @@ type AtomicRuntime = {
 	targetFunctions: Set<string>;
 	projectRoots: string[];
 	webpackWatchings: Set<WebpackWatchingLike>;
+	transpilePackages: Set<string>;
 };
 
 function getAtomicRuntime(): AtomicRuntime {
@@ -49,11 +50,15 @@ function getAtomicRuntime(): AtomicRuntime {
 			targetFunctions: DEFAULT_TARGET_FUNCTIONS,
 			projectRoots: [],
 			webpackWatchings: new Set(),
+			transpilePackages: new Set(),
 		};
 	}
 	const runtime = globalRef[ATOMIC_RUNTIME_KEY];
 	if (!runtime.webpackWatchings) {
 		runtime.webpackWatchings = new Set();
+	}
+	if (!runtime.transpilePackages) {
+		runtime.transpilePackages = new Set();
 	}
 	return runtime;
 }

@@ -57,6 +57,19 @@ describe("processArgument", () => {
 		expect(out).toContain("_bbbbbb");
 	});
 
+	it("rewrites nested object string values used by cva variants", () => {
+		const out = rewrite(`{
+			variants: {
+				size: { md: "flex p-6", sm: "hidden" }
+			},
+			compoundVariants: [{ class: "flex" }]
+		}`);
+		expect(out).toContain("_aaaaaa");
+		expect(out).toContain("_bbbbbb");
+		expect(out).toContain("_cccccc");
+		expect(out).not.toMatch(/"flex p-6"/);
+	});
+
 	it("ignores spreads and computed object keys", () => {
 		const out = rewrite(`{ ...extra, [dyn]: true, flex: true }`);
 		expect(out).toContain("_aaaaaa");

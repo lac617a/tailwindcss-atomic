@@ -51,6 +51,9 @@ function processObjectExpression(
 				property.key.name = transformClassString(property.key.name, classMap);
 				modified = true;
 			}
+			if (processArgument(property.value, classMap)) {
+				modified = true;
+			}
 		}
 	});
 	return modified;

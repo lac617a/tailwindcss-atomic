@@ -183,8 +183,72 @@ function flattenLayerAtRules(root: PostcssRoot) {
 	}
 }
 
+const VARIANT_PSEUDOS = new Set([
+	"hover",
+	"focus",
+	"active",
+	"disabled",
+	"visited",
+	"focus-within",
+	"focus-visible",
+	"checked",
+	"required",
+	"optional",
+	"valid",
+	"invalid",
+	"first",
+	"last",
+	"odd",
+	"even",
+	"empty",
+	"target",
+	"enabled",
+	"indeterminate",
+	"default",
+	"open",
+	"autofill",
+	"placeholder-shown",
+	"read-only",
+	"pressed",
+]);
+
 function unescapeCssClassName(value: string) {
-	return value.replace(/\\([^\n\r\f0-9a-fA-F])/g, "$1");
+	return value
+		.replace(/\\([^\n\r\f0-9a-fA-F])/g, "$1")
+		.replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?/g, (_, hex: string) => {
+			const code = Number.parseInt(hex, 16);
+			return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+		});
+}
+
+function stripRedundantVariantPseudo(key: string) {
+	const lastColon = key.lastIndexOf(":");
+	if (lastColon <= 0) return key;
+	const pseudo = key.slice(lastColon + 1);
+	if (!VARIANT_PSEUDOS.has(pseudo)) return key;
+	const rest = key.slice(0, lastColon);
+	if (
+		rest === pseudo ||
+		rest.startsWith(`${pseudo}:`) ||
+		rest.includes(`:${pseudo}:`) ||
+		rest.endsWith(`:${pseudo}`)
+	) {
+		return rest;
+	}
+	return key;
+}
+
+function normalizeArbitraryHex(key: string) {
+	return key.replace(
+		/\[#([0-9a-fA-F]+)\]/g,
+		(_match, hex: string) => `[#${hex.toLowerCase()}]`,
+	);
+}
+
+function normalizeUtilityClassName(value: string) {
+	return normalizeArbitraryHex(
+		stripRedundantVariantPseudo(unescapeCssClassName(value)),
+	);
 }
 
 function toPlainMap(classMap: Record<string, string>) {
@@ -201,7 +265,8 @@ function mergeClassMap(classMap: Record<string, string>) {
 
 	for (const [rawKey, value] of Object.entries(plain)) {
 		if (typeof value !== "string" || !value) continue;
-		const key = unescapeCssClassName(rawKey);
+		const key = normalizeUtilityClassName(rawKey);
+		if (!key) continue;
 		if (ATOMIC_RUNTIME.classMap[key] !== value) {
 			ATOMIC_RUNTIME.classMap[key] = value;
 			changed = true;
@@ -293,23 +358,11 @@ function isUtilitySelector(selector: string) {
 	return parts.every(isSingleUtilitySelector);
 }
 
-function isComponentLikeSimpleRule(node: PostcssRule) {
-	const selector = String(node.selector);
-	if (hasTailwindVariantEscape(selector)) return false;
-	if (isTailwindSpaceOrDivideSelector(selector)) return false;
-
-	const decls = declsOf(node);
-	if (decls.length <= 1) return false;
-	if (decls.some((decl) => TAILWIND_INTERNAL_PROP_RE.test(decl.prop))) {
-		return false;
-	}
-	return true;
-}
-
 /**
- * Utilidades Tailwind típicas (`.flex`, `.hover\:bg-red-500:hover`, `--tw-*`).
+ * Utilidades Tailwind típicas (`.flex`, `.py-2`, `.hover\:bg-red-500:hover`, `--tw-*`).
  * No: tokens de skin (`.pokerenchile { --color-*: … }`), componentes SCSS
  * (`.a .b`, `.pattern-background::before`) ni `:root` / `html` / `[data-theme]`.
+ * Multi-decl (`py-2`, `px-4`, `mx-auto`) SÍ son utilidades; no usar decls.length.
  */
 function isUtilityRule(node: ChildNode): node is PostcssRule {
 	if (node.type !== "rule") return false;
@@ -317,27 +370,22 @@ function isUtilityRule(node: ChildNode): node is PostcssRule {
 	if (hasThemeCustomProperties(node)) return false;
 	if (hasNestedChildRules(node)) return false;
 	if (!isUtilitySelector(node.selector)) return false;
-	if (isComponentLikeSimpleRule(node)) return false;
 	return true;
 }
 
-function atomicizeContainer(container: PostcssRoot) {
+function isHashedAtomicSelector(selector: string) {
+	return /(?:^|[\s,+>~])\._[0-9a-f]{6}\b/i.test(selector);
+}
+
+function atomicizeUtilityNodes(container: PostcssRoot) {
 	if (!container.nodes) return false;
 
-	let mapChanged = false;
-
-	for (const node of [...container.nodes]) {
-		if (node.type === "atrule" && NESTED_AT_RULES.has(node.name)) {
-			if (atomicizeContainer(node as unknown as PostcssRoot)) mapChanged = true;
-		}
-	}
-
 	const utilityNodes = container.nodes.filter(isUtilityRule);
-	if (!utilityNodes.length) return mapChanged;
+	if (!utilityNodes.length) return false;
 
 	const utilityCss = utilityNodes.map((node) => node.toString()).join("\n");
 	const {class_map, css_rules} = process_tailwind_css(utilityCss);
-	if (mergeClassMap(class_map)) mapChanged = true;
+	const mapChanged = mergeClassMap(class_map);
 
 	const rules = Array.isArray(css_rules) ? css_rules : [];
 	if (!rules.length) return mapChanged;
@@ -356,6 +404,41 @@ function atomicizeContainer(container: PostcssRoot) {
 	return true;
 }
 
+function atomicizeContainer(container: PostcssRoot) {
+	if (!container.nodes) return false;
+
+	let mapChanged = atomicizeUtilityNodes(container);
+
+	for (const node of [...container.nodes]) {
+		if (node.type === "atrule" && NESTED_AT_RULES.has(node.name)) {
+			if (atomicizeContainer(node as unknown as PostcssRoot)) mapChanged = true;
+		}
+	}
+
+	return mapChanged;
+}
+
+function dedupeAtomicRules(root: PostcssRoot) {
+	const seen = new Set<string>();
+	root.walkRules((rule) => {
+		if (!isHashedAtomicSelector(rule.selector)) return;
+		const key = rule.toString().replace(/\s+/g, " ").trim();
+		if (seen.has(key)) {
+			rule.remove();
+			return;
+		}
+		seen.add(key);
+	});
+}
+
+function lookupMappedClass(cls: string, classMap: Record<string, string>) {
+	return (
+		classMap[cls] ||
+		classMap[unescapeCssClassName(cls)] ||
+		classMap[normalizeUtilityClassName(cls)]
+	);
+}
+
 function transformClassString(
 	classStr: string,
 	classMap: Record<string, string>,
@@ -364,7 +447,7 @@ function transformClassString(
 	return classStr
 		.split(/\s+/)
 		.filter(Boolean)
-		.map((cls) => classMap[cls] || classMap[unescapeCssClassName(cls)] || cls)
+		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
 }
 
@@ -396,6 +479,7 @@ function applyAtomicCss(css: string) {
 			return {code: css, changed: false};
 		}
 
+		dedupeAtomicRules(root);
 		const mapChanged = classMapChangedSince(prev);
 		return {
 			code: formatAtomicCss(root.toString()),
@@ -616,6 +700,7 @@ export {
 	applyAtomicCss,
 	atomicizeContainer,
 	isUtilityRule,
+	normalizeUtilityClassName,
 	transformClassString,
 	warmupClassMapFromCss,
 	collectSearchRoots,

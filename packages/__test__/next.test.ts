@@ -1,6 +1,7 @@
 import type {Configuration} from "webpack";
 
 import {withTailwindAtomic} from "../next";
+import {ATOMIC_RUNTIME} from "../shared/constants";
 
 describe("withTailwindAtomic", () => {
 	it("injects turbopack loader rules for app source files", () => {
@@ -44,18 +45,31 @@ describe("withTailwindAtomic", () => {
 			enforce: "pre",
 			use: [{loader: expect.stringMatching(/loader\.cjs$/)}],
 		});
+		const loaderRule = result?.module?.rules?.[0] as {
+			exclude?: (resource: string) => boolean;
+		};
+		expect(typeof loaderRule.exclude).toBe("function");
+		expect(loaderRule.exclude?.("src/app.tsx")).toBe(false);
+		expect(loaderRule.exclude?.("node_modules/react/index.js")).toBe(true);
 		if (process.platform === "win32") {
 			expect(result?.cache).toEqual({type: "memory"});
 		}
 		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe(process.cwd());
 	});
 
-	it("returns the webpack config when no user hook is provided", () => {
-		const config = withTailwindAtomic({});
-		const webpackConfig: Configuration = {};
+	it("allows transpilePackages from Next config through the webpack exclude", () => {
+		const config = withTailwindAtomic({
+			transpilePackages: ["ui-latamwin"],
+		});
+		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
 		const result = config.webpack?.(webpackConfig, {dev: false});
-		expect(result?.plugins).toHaveLength(1);
-		expect(result?.cache).toBeUndefined();
+		const loaderRule = result?.module?.rules?.[0] as {
+			exclude?: (resource: string) => boolean;
+		};
+		expect(
+			loaderRule.exclude?.("node_modules/ui-latamwin/dist/Button.js"),
+		).toBe(false);
+		expect(ATOMIC_RUNTIME.transpilePackages.has("ui-latamwin")).toBe(true);
 	});
 
 	it("falls back to dist/loader.cjs when the source shim is missing", async () => {

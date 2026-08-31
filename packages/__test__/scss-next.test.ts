@@ -218,4 +218,29 @@ export default function RootLayout() {
 		expect(layout.code).not.toMatch(/\bclassName=\{clsx\([^)]*\bflex\b/);
 		expect(layout.code).not.toContain("bg-revamp-primary-default");
 	});
+
+	it("rewrites multi-decl spacing utilities in SSR className strings", () => {
+		const css = `
+.pokerenchile { --color-revamp-primary-default: var(--color-red-600); --color-red-600: #bc0000; }
+.py-2 { padding-top: .5rem; padding-bottom: .5rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.flex { display: flex; }
+.text-sm { font-size: 0.875rem; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(code).toContain(".pokerenchile");
+		for (const util of ["flex", "py-2", "px-4", "mx-auto", "text-sm"]) {
+			expect(ATOMIC_RUNTIME.classMap[util]).toMatch(/^_[0-9a-f]{6}$/);
+		}
+
+		const ssr = transformJs(
+			`_jsx("div", { className: "flex py-2 px-4 mx-auto text-sm" });`,
+			ATOMIC_RUNTIME.targetFunctions,
+		);
+		expect(ssr.code).not.toMatch(/\b(flex|py-2|px-4|mx-auto|text-sm)\b/);
+		expect(ssr.code).toContain(ATOMIC_RUNTIME.classMap["py-2"]);
+		expect(ssr.code).toContain(ATOMIC_RUNTIME.classMap["px-4"]);
+	});
 });

@@ -2,6 +2,8 @@ import {createRequire} from "node:module";
 import type {Configuration} from "webpack";
 
 import webpackTailwindAtomic from "./webpack";
+import {ATOMIC_RUNTIME} from "./shared/constants";
+import {shouldSkipJsTransform} from "./shared/js";
 
 const req = createRequire(import.meta.url);
 
@@ -27,6 +29,7 @@ type NextConfig = {
 		config: Configuration,
 		options: NextWebpackOptions,
 	) => Configuration;
+	transpilePackages?: string[];
 	turbopack?: {
 		root?: string;
 		rules?: Record<string, TurboRule | TurboRule[]>;
@@ -66,6 +69,13 @@ export function withTailwindAtomic(
 	options: Parameters<typeof webpackTailwindAtomic>[0] = {},
 ): NextConfig {
 	const atomicLoader = resolveAtomicLoader();
+	const transpilePackages = [
+		...(options?.transpilePackages ?? []),
+		...(nextConfig.transpilePackages ?? []),
+	];
+	for (const pkg of transpilePackages) {
+		ATOMIC_RUNTIME.transpilePackages.add(pkg);
+	}
 
 	return {
 		...nextConfig,
@@ -80,13 +90,18 @@ export function withTailwindAtomic(
 			process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= process.cwd();
 
 			config.plugins ??= [];
-			config.plugins.push(webpackTailwindAtomic(options));
+			config.plugins.push(
+				webpackTailwindAtomic({
+					...options,
+					transpilePackages,
+				}),
+			);
 
 			config.module ??= {rules: []};
 			config.module.rules ??= [];
 			config.module.rules.unshift({
 				test: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
-				exclude: [/node_modules/, /[\\/]\.next[\\/]/],
+				exclude: (resource: string) => shouldSkipJsTransform(resource),
 				enforce: "pre",
 				use: [{loader: atomicLoader}],
 			});

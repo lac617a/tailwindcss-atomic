@@ -36,6 +36,7 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.webpackWatchings.clear();
 	ATOMIC_RUNTIME.targetFunctions = new Set(DEFAULT_TARGET_FUNCTIONS);
 	ATOMIC_RUNTIME.transpilePackages = new Set();
+	ATOMIC_RUNTIME.ignoreCss = [];
 	delete process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
 	clearLinkedPackageCache();
 	if (!fs.existsSync(loaderStubPath)) {

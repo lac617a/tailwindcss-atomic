@@ -451,13 +451,47 @@ function transformClassString(
 		.join(" ");
 }
 
+function posixCssPath(from: string) {
+	return from.split("?")[0]?.replace(/\\/g, "/") ?? "";
+}
+
+const NODE_MODULES_PATH_RE = /(?:^|\/)node_modules(?:\/|$)/;
+
+function matchesIgnoreCssPattern(clean: string, original: string, pattern: string | RegExp) {
+	if (typeof pattern === "string") {
+		const needle = pattern.replace(/\\/g, "/");
+		return clean.includes(needle) || original.includes(pattern);
+	}
+	pattern.lastIndex = 0;
+	return pattern.test(clean) || pattern.test(original);
+}
+
+/**
+ * CSS de terceros (slick, fontawesome, cualquier node_modules) no se atomiciza:
+ * el JS vendor sigue usando clases literales en runtime.
+ */
+function shouldIgnoreCss(from?: string | null) {
+	if (!from) return false;
+	const clean = posixCssPath(from);
+	if (!clean) return false;
+	if (NODE_MODULES_PATH_RE.test(clean)) return true;
+	for (const pattern of ATOMIC_RUNTIME.ignoreCss) {
+		if (matchesIgnoreCssPattern(clean, from, pattern)) return true;
+	}
+	return false;
+}
+
 /**
  * Corre el WASM solo sobre utilidades (`.flex`, `.bg-red-500`, …).
  * Conserva `@theme`, `:root`, preflight, bloques de tokens de skin
  * (`.pokerenchile { --color-*: … }`), componentes SCSS, `@keyframes` y `@media`.
  */
-function applyAtomicCss(css: string) {
+function applyAtomicCss(css: string, from?: string) {
 	if (!css) {
+		return {code: css, changed: false};
+	}
+
+	if (shouldIgnoreCss(from)) {
 		return {code: css, changed: false};
 	}
 
@@ -701,6 +735,7 @@ export {
 	atomicizeContainer,
 	isUtilityRule,
 	normalizeUtilityClassName,
+	shouldIgnoreCss,
 	transformClassString,
 	warmupClassMapFromCss,
 	collectSearchRoots,

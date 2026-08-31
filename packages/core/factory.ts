@@ -10,6 +10,7 @@ import {
 	mergeClassMap,
 	applyAtomicCss,
 	warmupClassMapFromCss,
+	shouldIgnoreCss,
 } from "../shared/css";
 import {invalidateJsModules, isJsFile, shouldSkipJsTransform, transformJs} from "../shared/js";
 
@@ -31,9 +32,10 @@ export async function transformAtomicSource(code: string, id: string) {
 function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
 	for (const file of Object.values(bundle)) {
 		if (file.type === "asset" && file.fileName.endsWith(".css")) {
+			if (shouldIgnoreCss(file.fileName)) continue;
 			const source =
 				typeof file.source === "string" ? file.source : file.source.toString();
-			const {code, changed} = applyAtomicCss(source);
+			const {code, changed} = applyAtomicCss(source, file.fileName);
 			if (changed) {
 				file.source = code;
 			}
@@ -59,10 +61,51 @@ function isJsAssetName(fileName: string) {
 	return /\.[cm]?js$/.test(fileName);
 }
 
+type WebpackCssModule = {resource?: string; userRequest?: string};
+
+function cssModuleResource(module: WebpackCssModule) {
+	return module.resource || module.userRequest || "";
+}
+
+function collectVendorOnlyCssAssets(compilation: {
+	chunks?: Iterable<{files?: Iterable<string>}>;
+	chunkGraph?: {getChunkModules(chunk: unknown): Iterable<unknown>};
+}) {
+	const vendorOnly = new Set<string>();
+	if (!compilation.chunks || !compilation.chunkGraph) return vendorOnly;
+
+	for (const chunk of compilation.chunks) {
+		const cssFiles = [...(chunk.files ?? [])].filter((file) =>
+			file.endsWith(".css"),
+		);
+		if (!cssFiles.length) continue;
+
+		let cssModules = 0;
+		let ignored = 0;
+		for (const rawModule of compilation.chunkGraph.getChunkModules(chunk)) {
+			const module = rawModule as WebpackCssModule;
+			const resource = cssModuleResource(module);
+			if (!resource) continue;
+			if (!isCssFile(resource) && !/\.(css|scss|sass|less)(?:\?|$)/i.test(resource)) {
+				continue;
+			}
+			cssModules++;
+			if (shouldIgnoreCss(resource)) ignored++;
+		}
+
+		if (cssModules > 0 && ignored === cssModules) {
+			for (const file of cssFiles) vendorOnly.add(file);
+		}
+	}
+
+	return vendorOnly;
+}
+
 const factory: UnpluginFactory<{
 	targetFunctions?: Set<string>;
 	tailwindCss?: string;
 	transpilePackages?: string[];
+	ignoreCss?: Array<string | RegExp>;
 }> = (options = {}) => {
 	const targetFunctions = new Set(
 		options.targetFunctions || DEFAULT_TARGET_FUNCTIONS,
@@ -73,6 +116,9 @@ const factory: UnpluginFactory<{
 			ATOMIC_RUNTIME.transpilePackages.add(pkg);
 		}
 	}
+	if (options.ignoreCss?.length) {
+		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
+	}
 
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.
 	if (options.tailwindCss) {
@@ -80,8 +126,8 @@ const factory: UnpluginFactory<{
 		mergeClassMap(class_map);
 	}
 
-	function processCssAndMaybeInvalidate(css: string) {
-		const result = applyAtomicCss(css);
+	function processCssAndMaybeInvalidate(css: string, from?: string) {
+		const result = applyAtomicCss(css, from);
 
 		if (result.mapChanged) invalidateJsModules();
 
@@ -103,11 +149,7 @@ const factory: UnpluginFactory<{
 			if (!cleanId) return false;
 
 			if (isCssFile(cleanId)) {
-				return (
-					!cleanId.includes("/node_modules/") &&
-					!cleanId.includes("node_modules/") &&
-					!cleanId.includes("/.next/")
-				);
+				return !shouldIgnoreCss(cleanId) && !cleanId.includes("/.next/");
 			}
 
 			return isJsFile(cleanId) && !shouldSkipJsTransform(cleanId);
@@ -117,6 +159,7 @@ const factory: UnpluginFactory<{
 			await warmupClassMapFromCss();
 
 			if (isCssFile(id)) {
+				if (shouldIgnoreCss(id)) return null;
 				// Vite already wrapped the file in the HMR injector (`updateStyle`).
 				// Parsing that JS as CSS wipes the stylesheet → página en blanco y negro.
 				if (
@@ -127,7 +170,7 @@ const factory: UnpluginFactory<{
 					return null;
 				}
 
-				const {code: next, changed} = processCssAndMaybeInvalidate(code);
+				const {code: next, changed} = processCssAndMaybeInvalidate(code, id);
 				if (!changed) return null;
 				return {code: next, map: null};
 			}
@@ -231,6 +274,8 @@ const factory: UnpluginFactory<{
 						async (assets) => {
 							await warmupClassMapFromCss();
 
+							const vendorOnlyCss = collectVendorOnlyCssAssets(compilation);
+
 							// CSS first so the class map is complete (and rehydrated
 							// from already-atomic chunks) before any SSR/RSC JS rewrite.
 							const cssFiles: string[] = [];
@@ -241,9 +286,15 @@ const factory: UnpluginFactory<{
 							}
 
 							for (const fileName of cssFiles) {
+								if (shouldIgnoreCss(fileName) || vendorOnlyCss.has(fileName)) {
+									continue;
+								}
 								const asset = assets[fileName];
 								if (!asset) continue;
-								const {code, changed} = applyAtomicCss(assetText(asset));
+								const {code, changed} = applyAtomicCss(
+									assetText(asset),
+									fileName,
+								);
 								if (changed) {
 									compilation.updateAsset(fileName, new RawSource(code));
 								}

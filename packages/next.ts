@@ -76,6 +76,9 @@ export function withTailwindAtomic(
 	for (const pkg of transpilePackages) {
 		ATOMIC_RUNTIME.transpilePackages.add(pkg);
 	}
+	if (options?.ignoreCss?.length) {
+		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
+	}
 
 	return {
 		...nextConfig,

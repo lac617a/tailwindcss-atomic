@@ -94,6 +94,14 @@ describe("factory plugin", () => {
 		expect(plugin.transformInclude("src/app.tsx")).toBe(true);
 		expect(plugin.transformInclude("src/index.css")).toBe(true);
 		expect(plugin.transformInclude("src/Button.module.css")).toBe(false);
+		expect(
+			plugin.transformInclude("node_modules/slick-carousel/slick/slick.css"),
+		).toBe(false);
+		expect(
+			plugin.transformInclude(
+				"D:\\repo\\node_modules\\slick-carousel\\slick\\slick.css",
+			),
+		).toBe(false);
 
 		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
 		expect(
@@ -118,6 +126,24 @@ describe("factory plugin", () => {
 		expect(atomic?.code).toContain("/*! tailwind-atomic */");
 
 		expect(await plugin.transform(":root{color:red}", "app.css")).toBeNull();
+	});
+
+	it("does not transform slick-carousel CSS under node_modules", async () => {
+		const plugin = createPlugin();
+		const slick = ".slick-slide { display: none; float: left; }";
+		expect(
+			await plugin.transform(
+				slick,
+				"node_modules/slick-carousel/slick/slick.css",
+			),
+		).toBeNull();
+		expect(
+			await plugin.transform(
+				slick,
+				"D:\\repo\\node_modules\\slick-carousel\\slick\\slick.css",
+			),
+		).toBeNull();
+		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
 	});
 
 	it("transforms JS when the class map has entries", async () => {
@@ -541,6 +567,79 @@ describe("factory webpack hook", () => {
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe(hashed);
 		expect(updated["server/app/page.js"]).toContain(hashed);
 		expect(updated["app.css"]).toBeUndefined();
+	});
+
+	it("does not atomicize webpack CSS assets that originate in node_modules", async () => {
+		const plugin = createPlugin();
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string}>) => Promise<void>)
+			| undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		const slickChunk = {files: ["static/css/slick.css"]};
+		plugin.webpack({
+			context: "/tmp/app",
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							chunks: [slickChunk],
+							chunkGraph: {
+								getChunkModules(chunk: {files?: string[]}) {
+									if (chunk === slickChunk) {
+										return [
+											{
+												resource:
+													"D:\\repo\\node_modules\\slick-carousel\\slick\\slick.css",
+											},
+										];
+									}
+									return [];
+								},
+							},
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		const slick = ".slick-slide { display: none; } .slick-track { display: block; }";
+		await processAssets?.({
+			"static/css/slick.css": {source: () => slick},
+			"main.css": {source: () => ".flex { display: flex } .p-4 { padding: 1rem }"},
+		});
+
+		expect(updated["static/css/slick.css"]).toBeUndefined();
+		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
+		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 	});
 
 	it("registers webpack watching so JS invalidation works in Next dev", async () => {

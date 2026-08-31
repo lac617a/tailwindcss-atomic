@@ -31,6 +31,8 @@ type WebpackWatchingLike = {
 
 const ATOMIC_RUNTIME_KEY = "__tailwindAtomicRuntime__";
 
+type IgnoreCssPattern = string | RegExp;
+
 type AtomicRuntime = {
 	viteServer: ViteDevServerLike | null;
 	classMap: Record<string, string>;
@@ -38,6 +40,7 @@ type AtomicRuntime = {
 	projectRoots: string[];
 	webpackWatchings: Set<WebpackWatchingLike>;
 	transpilePackages: Set<string>;
+	ignoreCss: IgnoreCssPattern[];
 };
 
 function getAtomicRuntime(): AtomicRuntime {
@@ -52,6 +55,7 @@ function getAtomicRuntime(): AtomicRuntime {
 			projectRoots: [],
 			webpackWatchings: new Set(),
 			transpilePackages: new Set(),
+			ignoreCss: [],
 		};
 	}
 	const runtime = globalRef[ATOMIC_RUNTIME_KEY];
@@ -60,6 +64,9 @@ function getAtomicRuntime(): AtomicRuntime {
 	}
 	if (!runtime.transpilePackages) {
 		runtime.transpilePackages = new Set();
+	}
+	if (!runtime.ignoreCss) {
+		runtime.ignoreCss = [];
 	}
 	return runtime;
 }
@@ -93,3 +100,5 @@ export {
 	CSS_ENTRY_CANDIDATES,
 	DEFAULT_TARGET_FUNCTIONS,
 };
+
+export type {IgnoreCssPattern};

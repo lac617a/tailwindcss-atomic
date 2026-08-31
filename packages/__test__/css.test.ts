@@ -10,6 +10,7 @@ import {
 	findNearestPackageDir,
 	isCssFile,
 	mergeClassMap,
+	shouldIgnoreCss,
 	normalizeTailwindSassDirectives,
 	prepareWarmupSource,
 	rehydrateClassMapFromCss,
@@ -34,6 +35,33 @@ describe("isCssFile", () => {
 		expect(isCssFile("app.tsx")).toBe(false);
 		expect(isCssFile("")).toBe(false);
 		expect(isCssFile("?")).toBe(false);
+	});
+});
+
+describe("shouldIgnoreCss", () => {
+	it("ignores node_modules on POSIX and Windows paths", () => {
+		expect(shouldIgnoreCss("node_modules/slick-carousel/slick/slick.css")).toBe(
+			true,
+		);
+		expect(
+			shouldIgnoreCss("D:\\repo\\node_modules\\slick-carousel\\slick\\slick.css"),
+		).toBe(true);
+		expect(
+			shouldIgnoreCss("/repo/node_modules/slick-carousel/slick/slick-theme.css"),
+		).toBe(true);
+		expect(
+			shouldIgnoreCss("/repo/node_modules/.pnpm/slick-carousel@1.8.1/node_modules/slick-carousel/slick/slick.css"),
+		).toBe(true);
+		expect(shouldIgnoreCss("src/app/globals.css")).toBe(false);
+		expect(shouldIgnoreCss(undefined)).toBe(false);
+		expect(shouldIgnoreCss("")).toBe(false);
+	});
+
+	it("honors extra ignoreCss patterns", () => {
+		ATOMIC_RUNTIME.ignoreCss.push("vendor/slick", /fontawesome/i);
+		expect(shouldIgnoreCss("app/vendor/slick/slick.css")).toBe(true);
+		expect(shouldIgnoreCss("src/vendor/fontAwesome/all.css")).toBe(true);
+		expect(shouldIgnoreCss("src/app/globals.css")).toBe(false);
 	});
 });
 
@@ -380,6 +408,38 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 			changed: false,
 			mapChanged: false,
 		});
+	});
+
+	it("leaves vendor slick CSS untouched when from is node_modules", () => {
+		const slick = `
+.slick-slider { position: relative; display: block; }
+.slick-list { overflow: hidden; }
+.slick-track { position: relative; display: block; }
+.slick-slide { display: none; float: left; height: 100%; min-height: 1px; }
+.slick-initialized .slick-slide { display: block; }
+.slick-arrow { position: absolute; }
+.slick-dots { position: absolute; bottom: 0; }
+.flex { display: flex; }
+`;
+		const skipped = applyAtomicCss(
+			slick,
+			"D:\\repo\\node_modules\\slick-carousel\\slick\\slick.css",
+		);
+		expect(skipped.changed).toBe(false);
+		expect(skipped.code).toBe(slick);
+		expect(skipped.code).toContain(".slick-slider");
+		expect(skipped.code).toContain(".slick-track");
+		expect(skipped.code).toContain(".slick-slide");
+		expect(skipped.code).toContain(".slick-list");
+		expect(skipped.code).not.toContain(ATOMIC_MARKER);
+		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["slick-slider"]).toBeUndefined();
+
+		const app = applyAtomicCss(".flex { display: flex } .p-4 { padding: 1rem }", "src/app/globals.css");
+		expect(app.changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(app.code).not.toMatch(/\.slick-/);
 	});
 });
 

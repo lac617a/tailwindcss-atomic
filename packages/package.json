@@ -1,9 +1,9 @@
 {
 	"name": "tailwindcss-atomic",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"license": "MIT",
 	"type": "module",
-	"author": "lac6174 <dominyel.r@gmail.com>",
+	"author": "lac617a <dominyel.r@gmail.com>",
 	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup and next.js!",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",

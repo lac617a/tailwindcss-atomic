@@ -4,6 +4,7 @@ import {ATOMIC_MARKER, ATOMIC_RUNTIME} from "../shared/constants";
 import {
 	applyAtomicCss,
 	atomicizeContainer,
+	isUtilityRule,
 	collectSearchRoots,
 	findCssEntry,
 	findNearestPackageDir,
@@ -186,6 +187,114 @@ describe("applyAtomicCss", () => {
 		expect(applyAtomicCss(css)).toEqual({code: css, changed: false});
 	});
 
+	it("preserves skin token selectors after flattening @layer base", () => {
+		const css = `
+@layer base {
+  .pokerenchile {
+    --color-red-600: #bc0000;
+    --color-revamp-primary-default: var(--color-red-600);
+    --pattern-background: #121216b3;
+  }
+}
+.bg-revamp-primary-default { background-color: var(--color-revamp-primary-default); }
+.flex { display: flex; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(code).toMatch(
+			/\.pokerenchile\s*\{[^}]*--color-red-600:\s*#bc0000/,
+		);
+		expect(code).toMatch(
+			/\.pokerenchile\s*\{[^}]*--color-revamp-primary-default:\s*var\(--color-red-600\)/,
+		);
+		expect(code).toMatch(
+			/\.pokerenchile\s*\{[^}]*--pattern-background:\s*#121216b3/,
+		);
+		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["bg-revamp-primary-default"]).toMatch(
+			/^_[0-9a-f]{6}$/,
+		);
+		expect(code).not.toContain(".flex {");
+		expect(code).not.toContain(".bg-revamp-primary-default");
+		expect(code).toContain(
+			`${ATOMIC_RUNTIME.classMap["bg-revamp-primary-default"]}`,
+		);
+		expect(code).toMatch(
+			new RegExp(
+				`\\._[0-9a-f]{6}[^{]*\\{[^}]*background-color:\\s*var\\(--color-revamp-primary-default\\)`,
+			),
+		);
+		expect(code).not.toMatch(
+			/\._[0-9a-f]{6}[^{]*\{[^}]*--color-revamp-primary-default:/,
+		);
+		expect(code).not.toMatch(/\._[0-9a-f]{6}[^{]*\{[^}]*--color-red-600:/);
+		expect(code).not.toMatch(
+			/\._[0-9a-f]{6}[^{]*\{[^}]*--pattern-background:/,
+		);
+	});
+
+	it("preserves component/pseudo selectors and document theme roots", () => {
+		const css = `
+html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surface-general-100); }
+.pokerenchile .pattern-background::before { content: ""; background: var(--pattern-background); }
+.app-layout { display: flex; gap: 1rem; }
+.flex { display: flex; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(code).toContain("html:root");
+		expect(code).toContain("[data-theme]");
+		expect(code).toContain(".pokerenchile .pattern-background::before");
+		expect(code).toContain(".app-layout");
+		expect(ATOMIC_RUNTIME.classMap["pattern-background"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["app-layout"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("still atomicizes Tailwind --tw-* utilities and space/divide selectors", () => {
+		const css = `
+.from-red-500 {
+  --tw-gradient-from: #ef4444 var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(239 68 68 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.space-y-4 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+}
+.hover\\:bg-red-500:hover { background-color: #ef4444; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["from-red-500"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["space-y-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["hover:bg-red-500"]).toMatch(
+			/^_[0-9a-f]{6}$/,
+		);
+		expect(code).not.toContain(".from-red-500");
+		expect(code).not.toContain(".space-y-4");
+	});
+
+	it("keeps mixed token + style decls on the semantic skin selector", () => {
+		const css = `
+.pokerenchile {
+  --color-red-600: #bc0000;
+  color: #bc0000;
+  .pattern-background::before { content: ""; }
+}
+.flex { display: flex; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(code).toMatch(/\.pokerenchile\s*\{[^}]*--color-red-600:\s*#bc0000/);
+		expect(code).toMatch(/\.pokerenchile\s*\{[^}]*color:\s*#bc0000/);
+		expect(code).toContain(".pattern-background::before");
+		expect(ATOMIC_RUNTIME.classMap["pokerenchile"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
 	it("rehydrates the class map from an already-atomic sheet", () => {
 		const {code} = applyAtomicCss(".flex { display: flex }");
 		const hashed = ATOMIC_RUNTIME.classMap["flex"];
@@ -212,6 +321,49 @@ describe("atomicizeContainer", () => {
 		const root = postcss.parse("");
 		root.nodes = undefined as unknown as never;
 		expect(atomicizeContainer(root)).toBe(false);
+	});
+});
+
+describe("isUtilityRule", () => {
+	function firstRule(css: string) {
+		const node = postcss.parse(css).nodes[0];
+		if (!node) throw new Error("expected a CSS node");
+		return isUtilityRule(node);
+	}
+
+	it("accepts typical Tailwind utilities", () => {
+		expect(firstRule(".flex { display: flex }")).toBe(true);
+		expect(firstRule(".bg-revamp-primary-default { background-color: var(--x) }")).toBe(
+			true,
+		);
+		expect(firstRule(".hover\\:bg-red-500:hover { color: red }")).toBe(true);
+		expect(
+			firstRule(
+				".placeholder-gray-400::placeholder { color: #9ca3af }",
+			),
+		).toBe(true);
+	});
+
+	it("rejects theme tokens, component selectors and document roots", () => {
+		expect(
+			firstRule(".pokerenchile { --color-red-600: #bc0000 }"),
+		).toBe(false);
+		expect(
+			firstRule(".pattern-background::before { content: \"\" }"),
+		).toBe(false);
+		expect(
+			firstRule(".pokerenchile .child { color: red }"),
+		).toBe(false);
+		expect(
+			firstRule(".app-layout { display: flex; gap: 1rem }"),
+		).toBe(false);
+		expect(
+			firstRule("html.pokerenchile { --color-red-600: #bc0000 }"),
+		).toBe(false);
+		expect(firstRule(":root { --bg: white }")).toBe(false);
+		expect(
+			firstRule("[data-theme] { background-color: var(--x) }"),
+		).toBe(false);
 	});
 });
 

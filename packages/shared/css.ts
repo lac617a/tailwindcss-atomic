@@ -4,6 +4,7 @@ import path from "node:path";
 import {pathToFileURL} from "node:url";
 import type {
 	ChildNode,
+	Declaration as PostcssDeclaration,
 	Root as PostcssRoot,
 	Rule as PostcssRule,
 } from "postcss";
@@ -210,8 +211,114 @@ function mergeClassMap(classMap: Record<string, string>) {
 	return changed;
 }
 
+const TAILWIND_INTERNAL_PROP_RE = /^--tw-/;
+
+const TAILWIND_PSEUDO_ELEMENT_RE =
+	/::(?:-webkit-input-placeholder|placeholder|file-selector-button|marker|backdrop|first-line|first-letter|selection)\b/g;
+
+const TAILWIND_SPACE_DIVIDE_RE =
+	/^\.(?:\\.|[^\s>+~])+\s*>\s*:not\(\[hidden\]\)\s*~\s*:not\(\[hidden\]\)$/;
+
+function declsOf(node: PostcssRule): PostcssDeclaration[] {
+	return (node.nodes ?? []).filter(
+		(child): child is PostcssDeclaration => child.type === "decl",
+	);
+}
+
+function hasThemeCustomProperties(node: PostcssRule) {
+	return declsOf(node).some(
+		(decl) =>
+			decl.prop.startsWith("--") && !TAILWIND_INTERNAL_PROP_RE.test(decl.prop),
+	);
+}
+
+function hasNestedChildRules(node: PostcssRule) {
+	return (node.nodes ?? []).some(
+		(child) => child.type === "rule" || child.type === "atrule",
+	);
+}
+
+function hasTailwindVariantEscape(selector: string) {
+	return selector.includes("\\:");
+}
+
+function isDocumentOrThemeRootSelector(selector: string) {
+	const sel = selector.trim();
+	return (
+		/^(?:html|body|:root)\b/.test(sel) || /\[data-theme\b/.test(sel)
+	);
+}
+
+function isTailwindSpaceOrDivideSelector(selector: string) {
+	return TAILWIND_SPACE_DIVIDE_RE.test(selector.trim());
+}
+
+function hasComponentPseudoElement(selector: string) {
+	if (!selector.includes("::")) return false;
+	if (hasTailwindVariantEscape(selector)) return false;
+	TAILWIND_PSEUDO_ELEMENT_RE.lastIndex = 0;
+	return selector.replace(TAILWIND_PSEUDO_ELEMENT_RE, "").includes("::");
+}
+
+function hasNonUtilityCombinator(selector: string) {
+	if (isTailwindSpaceOrDivideSelector(selector)) return false;
+	const normalized = selector.replace(/\\./g, "").replace(/\([^)]*\)/g, "()");
+	return /[\s>+~]/.test(normalized);
+}
+
+function countUnescapedClasses(selector: string) {
+	return selector.match(/(?<!\\)\.(?:\\.|[^\s.:#[\]>+~,])+/g)?.length ?? 0;
+}
+
+function isSingleUtilitySelector(selector: string) {
+	const sel = selector.trim();
+	if (!sel.includes(".")) return false;
+
+	if (isTailwindSpaceOrDivideSelector(sel)) return true;
+
+	const hasVariant = hasTailwindVariantEscape(sel);
+	if (!hasVariant) {
+		if (isDocumentOrThemeRootSelector(sel)) return false;
+		if (hasComponentPseudoElement(sel)) return false;
+		if (hasNonUtilityCombinator(sel)) return false;
+		if (countUnescapedClasses(sel) !== 1) return false;
+	}
+
+	return true;
+}
+
+function isUtilitySelector(selector: string) {
+	const parts = postcss.list.comma(selector).map((part) => part.trim());
+	if (!parts.length) return false;
+	return parts.every(isSingleUtilitySelector);
+}
+
+function isComponentLikeSimpleRule(node: PostcssRule) {
+	const selector = String(node.selector);
+	if (hasTailwindVariantEscape(selector)) return false;
+	if (isTailwindSpaceOrDivideSelector(selector)) return false;
+
+	const decls = declsOf(node);
+	if (decls.length <= 1) return false;
+	if (decls.some((decl) => TAILWIND_INTERNAL_PROP_RE.test(decl.prop))) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Utilidades Tailwind típicas (`.flex`, `.hover\:bg-red-500:hover`, `--tw-*`).
+ * No: tokens de skin (`.pokerenchile { --color-*: … }`), componentes SCSS
+ * (`.a .b`, `.pattern-background::before`) ni `:root` / `html` / `[data-theme]`.
+ */
 function isUtilityRule(node: ChildNode): node is PostcssRule {
-	return node.type === "rule" && String(node.selector).includes(".");
+	if (node.type !== "rule") return false;
+	if (!String(node.selector).includes(".")) return false;
+	if (hasThemeCustomProperties(node)) return false;
+	if (hasNestedChildRules(node)) return false;
+	if (!isUtilitySelector(node.selector)) return false;
+	if (isComponentLikeSimpleRule(node)) return false;
+	return true;
 }
 
 function atomicizeContainer(container: PostcssRoot) {
@@ -263,8 +370,8 @@ function transformClassString(
 
 /**
  * Corre el WASM solo sobre utilidades (`.flex`, `.bg-red-500`, …).
- * Conserva `@theme`, `:root`, preflight, `@keyframes` y `@media`
- * para que funcionen colores de Tailwind v3, v4 y SCSS.
+ * Conserva `@theme`, `:root`, preflight, bloques de tokens de skin
+ * (`.pokerenchile { --color-*: … }`), componentes SCSS, `@keyframes` y `@media`.
  */
 function applyAtomicCss(css: string) {
 	if (!css) {
@@ -508,6 +615,7 @@ export {
 	mergeClassMap,
 	applyAtomicCss,
 	atomicizeContainer,
+	isUtilityRule,
 	transformClassString,
 	warmupClassMapFromCss,
 	collectSearchRoots,

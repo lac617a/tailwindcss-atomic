@@ -7,7 +7,7 @@ import path from "node:path";
 import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
 import {getCalleeName} from "./utils";
-import {processArgument} from "../core/process";
+import {processArgument, processCvaCall} from "../core/process";
 
 function interopDefault<T>(mod: T | {default: T}): T {
 	let current: unknown = mod;
@@ -186,7 +186,11 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 			CallExpression(path) {
 				const funcName = getCalleeName(path.node.callee);
 
-				if (funcName && targetFunctions.has(funcName)) {
+				if (funcName === "cva" && targetFunctions.has("cva")) {
+					if (processCvaCall(path.node.arguments, classMap)) {
+						hasModifications = true;
+					}
+				} else if (funcName && targetFunctions.has(funcName)) {
 					path.node.arguments.forEach((arg) => {
 						if (processArgument(arg, classMap)) {
 							hasModifications = true;

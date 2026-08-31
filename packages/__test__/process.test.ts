@@ -2,7 +2,7 @@ import {parse} from "@babel/parser";
 import generateImport from "@babel/generator";
 import type {ExpressionStatement} from "@babel/types";
 
-import {processArgument} from "../core/process";
+import {processArgument, processCvaCall} from "../core/process";
 
 function interopDefault<T>(mod: T | {default: T}): T {
 	let current: unknown = mod;
@@ -18,12 +18,30 @@ const classMap = {
 	flex: "_aaaaaa",
 	"p-6": "_bbbbbb",
 	hidden: "_cccccc",
+	box: "_box001",
+	"box-border": "_bab75d",
+	shadow: "_660aea _40fc51 _6d43b5",
+	"shadow-sm": "_34ae1c _22d8f1",
+	"shadow-md": "_shmd01",
+	"shadow-neutral-950/25": "_dc1c5d _32febe",
+	sm: "_smhash",
+	md: "_mdhash",
+	"mt-2": "_mt2001",
 };
 
 function rewrite(code: string) {
 	const ast = parse(`(${code})`, {sourceType: "module"});
 	const stmt = ast.program.body[0] as ExpressionStatement;
 	processArgument(stmt.expression, classMap);
+	return generate(ast).code;
+}
+
+function rewriteCva(code: string) {
+	const ast = parse(code, {sourceType: "module"});
+	const stmt = ast.program.body[0] as ExpressionStatement;
+	const call = stmt.expression;
+	if (call.type !== "CallExpression") throw new Error("expected call");
+	processCvaCall(call.arguments, classMap);
 	return generate(ast).code;
 }
 
@@ -57,19 +75,6 @@ describe("processArgument", () => {
 		expect(out).toContain("_bbbbbb");
 	});
 
-	it("rewrites nested object string values used by cva variants", () => {
-		const out = rewrite(`{
-			variants: {
-				size: { md: "flex p-6", sm: "hidden" }
-			},
-			compoundVariants: [{ class: "flex" }]
-		}`);
-		expect(out).toContain("_aaaaaa");
-		expect(out).toContain("_bbbbbb");
-		expect(out).toContain("_cccccc");
-		expect(out).not.toMatch(/"flex p-6"/);
-	});
-
 	it("ignores spreads and computed object keys", () => {
 		const out = rewrite(`{ ...extra, [dyn]: true, flex: true }`);
 		expect(out).toContain("_aaaaaa");
@@ -88,5 +93,42 @@ describe("processArgument", () => {
 		const ast = parse("1 + 1;", {sourceType: "module"});
 		const stmt = ast.program.body[0] as ExpressionStatement;
 		expect(processArgument(stmt.expression, classMap)).toBe(false);
+	});
+});
+
+describe("processCvaCall", () => {
+	const source = `cva(["box", "box-border"], {
+  variants: {
+    shadow: {
+      sm: ["shadow-sm", "shadow-neutral-950/25"],
+      md: "shadow-md",
+    },
+  },
+  defaultVariants: { shadow: "sm" },
+  compoundVariants: [{ shadow: "sm", class: "mt-2" }],
+});`;
+
+	it("rewrites class values but never CVA config keys or variant names", () => {
+		const out = rewriteCva(source);
+		expect(out).toMatch(/\bshadow\s*:/);
+		expect(out).toMatch(/\bsm\s*:/);
+		expect(out).toMatch(/\bmd\s*:/);
+		expect(out).not.toContain("_660aea");
+		expect(out).not.toMatch(/\bshadow:\s*"_smhash"/);
+		expect(out).toMatch(/defaultVariants:\s*\{\s*shadow:\s*["']sm["']/);
+		expect(out).toMatch(/shadow:\s*["']sm["']/);
+		expect(out).toContain("_box001");
+		expect(out).toContain("_bab75d");
+		expect(out).toContain("_34ae1c");
+		expect(out).toContain("_shmd01");
+		expect(out).toContain("_mt2001");
+		expect(out).not.toMatch(/\bbox-border\b/);
+		expect(out).not.toMatch(/\bshadow-sm\b/);
+		expect(out).not.toMatch(/\bmt-2\b/);
+	});
+
+	it("emits JS that @babel/parser can parse", () => {
+		const out = rewriteCva(source);
+		expect(() => parse(out, {sourceType: "module"})).not.toThrow();
 	});
 });

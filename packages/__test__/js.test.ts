@@ -1,3 +1,5 @@
+import {parse} from "@babel/parser";
+
 import {ATOMIC_RUNTIME} from "../shared/constants";
 import {
 	clearLinkedPackageCache,
@@ -136,19 +138,36 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_aaaaaa");
 	});
 
-	it("rewrites cva variant values so classNames are not left half-hashed", () => {
+	it("rewrites cva class values but leaves variant keys and names intact", () => {
+		ATOMIC_RUNTIME.classMap["shadow"] = "_660aea _40fc51 _6d43b5";
+		ATOMIC_RUNTIME.classMap["sm"] = "_smhash";
+		ATOMIC_RUNTIME.classMap["box-border"] = "_bab75d";
+		ATOMIC_RUNTIME.classMap["shadow-sm"] = "_34ae1c";
+		ATOMIC_RUNTIME.classMap["mt-2"] = "_mt2001";
 		const result = transformJs(
 			`
-			cva("flex", {
-				variants: { size: { md: "p-6 hidden" } }
+			cva(["box", "box-border"], {
+				variants: { shadow: { sm: ["shadow-sm"], md: "p-6 hidden" } },
+				defaultVariants: { shadow: "sm" },
+				compoundVariants: [{ shadow: "sm", class: "mt-2" }],
 			});
 			`,
 			new Set(["cva"]),
 		);
-		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("shadow:");
+		expect(result.code).toMatch(/\bsm\s*:/);
+		expect(result.code).toMatch(/\bmd\s*:/);
 		expect(result.code).toContain("_bbbbbb");
 		expect(result.code).toContain("_cccccc");
+		expect(result.code).toContain("_bab75d");
+		expect(result.code).toContain("_34ae1c");
+		expect(result.code).toContain("_mt2001");
+		expect(result.code).not.toContain("_660aea");
 		expect(result.code).not.toMatch(/\bp-6\b/);
+		expect(result.code).not.toMatch(/defaultVariants:\s*\{[^}]*_smhash/);
+		expect(() =>
+			parse(result.code ?? "", {sourceType: "module"}),
+		).not.toThrow();
 	});
 
 	it("ignores helpers that are not in the target set", () => {

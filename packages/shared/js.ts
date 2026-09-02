@@ -198,6 +198,15 @@ function rewriteMappedClassNode(
 		}
 		case "LogicalExpression":
 			return rewriteMappedClassNode(node.right, classMap);
+		case "ParenthesizedExpression":
+		case "TSAsExpression":
+		case "TSSatisfiesExpression":
+		case "TSNonNullExpression":
+		case "TSTypeAssertion":
+			return rewriteMappedClassNode(
+				(node as {expression: Node | null}).expression,
+				classMap,
+			);
 		default:
 			return false;
 	}

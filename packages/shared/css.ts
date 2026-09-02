@@ -612,11 +612,16 @@ function transformClassString(
 	classMap: Record<string, string>,
 ) {
 	if (!classStr) return classStr;
-	return classStr
+	const leading = classStr.match(/^\s*/)?.[0] ?? "";
+	const trailing = classStr.match(/\s*$/)?.[0] ?? "";
+	const mid = classStr.slice(leading.length, classStr.length - trailing.length);
+	if (!mid) return classStr;
+	const rewritten = mid
 		.split(/[\s"']+/)
 		.filter(Boolean)
 		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
+	return `${leading}${rewritten}${trailing}`;
 }
 
 function posixCssPath(from: string) {

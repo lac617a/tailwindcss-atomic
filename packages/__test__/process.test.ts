@@ -55,8 +55,19 @@ describe("processArgument", () => {
 		expect(rewrite(`"flex p-6"`)).toContain("_aaaaaa _bbbbbb");
 	});
 
-	it("rewrites template literals", () => {
-		expect(rewrite("`flex extra`")).toContain("_aaaaaa extra");
+	it("rewrites template interpolations (ternaries inside className templates)", () => {
+		expect(
+			rewrite(
+				"`overflow-hidden duration-300 ${searchOpen ? \"p-6 hidden\" : \"flex\"}`",
+			),
+		).toMatch(/_bbbbbb[\s\S]*_cccccc[\s\S]*_aaaaaa/);
+	});
+
+	it("rewrites nested templates and parenthesized ternaries in interpolations", () => {
+		const out = rewrite("`flex ${cond ? \"p-6\" : (\"hidden\")}`");
+		expect(out).toContain("_aaaaaa");
+		expect(out).toContain("_bbbbbb");
+		expect(out).toContain("_cccccc");
 	});
 
 	it("skips empty template quasis and still rewrites cooked values", () => {

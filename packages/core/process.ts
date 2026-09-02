@@ -24,20 +24,33 @@ function processTemplateLiteral(
 	templateLiteral: TemplateLiteral,
 	classMap: Record<string, string>,
 ) {
+	let changed = false;
 	templateLiteral.quasis.forEach((element) => {
 		if (element.value && element.value.raw) {
-			element.value.raw = transformClassString(element.value.raw, classMap);
+			const nextRaw = transformClassString(element.value.raw, classMap);
+			if (nextRaw !== element.value.raw) {
+				element.value.raw = nextRaw;
+				changed = true;
+			}
 			if (element.value.cooked != null) {
-				element.value.cooked = transformClassString(
+				const nextCooked = transformClassString(
 					element.value.cooked,
 					classMap,
 				);
+				if (nextCooked !== element.value.cooked) {
+					element.value.cooked = nextCooked;
+					changed = true;
+				}
 			}
-			modified = true;
 		}
 	});
 
-	return modified;
+	templateLiteral.expressions.forEach((expr) => {
+		if (processClassValue(expr as ProcessableNode, classMap)) changed = true;
+	});
+
+	if (changed) modified = true;
+	return changed;
 }
 
 function getStaticPropertyKey(property: ObjectProperty): string | undefined {
@@ -90,6 +103,15 @@ function processClassValue(
 		}
 		case "LogicalExpression":
 			return processClassValue(argNode.right, classMap);
+		case "ParenthesizedExpression":
+		case "TSAsExpression":
+		case "TSSatisfiesExpression":
+		case "TSNonNullExpression":
+		case "TSTypeAssertion":
+			return processClassValue(
+				(argNode as {expression: ProcessableNode}).expression,
+				classMap,
+			);
 		default:
 			return false;
 	}
@@ -203,6 +225,16 @@ export function processArgument(
 		}
 		case "LogicalExpression":
 			return processArgument(argNode.right, classMap, rewriteObjectKeys);
+		case "ParenthesizedExpression":
+		case "TSAsExpression":
+		case "TSSatisfiesExpression":
+		case "TSNonNullExpression":
+		case "TSTypeAssertion":
+			return processArgument(
+				(argNode as {expression: ProcessableNode}).expression,
+				classMap,
+				rewriteObjectKeys,
+			);
 		default:
 			return false;
 	}

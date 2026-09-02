@@ -109,6 +109,12 @@ describe("transformClassString", () => {
 		expect(transformClassString("", classMap)).toBe("");
 	});
 
+	it("preserves leading and trailing whitespace for template interpolations", () => {
+		expect(transformClassString("flex p-6 ", classMap)).toBe("_aaaaaa _bbbbbb ");
+		expect(transformClassString(" flex", classMap)).toBe(" _aaaaaa");
+		expect(transformClassString(" \n\t ", classMap)).toBe(" \n\t ");
+	});
+
 	it("falls back to unescaped keys", () => {
 		expect(
 			transformClassString("hover:bg-red-500", {

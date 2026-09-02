@@ -93,6 +93,31 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_aaaaaa");
 	});
 
+	it("rewrites className template literals with ternary interpolations", () => {
+		ATOMIC_RUNTIME.classMap["overflow-hidden"] = "_ovh001";
+		ATOMIC_RUNTIME.classMap["transition-all"] = "_tra001";
+		ATOMIC_RUNTIME.classMap["duration-300"] = "_dur001";
+		ATOMIC_RUNTIME.classMap["max-h-40"] = "_mh4001";
+		ATOMIC_RUNTIME.classMap["border-t"] = "_brt001";
+		ATOMIC_RUNTIME.classMap["max-h-0"] = "_mh0001";
+		const result = transformJs(
+			`export const n = <div className={\`overflow-hidden transition-all duration-300 \${
+				searchOpen ? "max-h-40 border-t" : "max-h-0"
+			}\`} />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_ovh001");
+		expect(result.code).toContain("_tra001");
+		expect(result.code).toContain("_dur001");
+		expect(result.code).toContain("_mh4001");
+		expect(result.code).toContain("_brt001");
+		expect(result.code).toContain("_mh0001");
+		expect(result.code).not.toMatch(/overflow-hidden/);
+		expect(result.code).not.toMatch(/max-h-40/);
+		expect(result.code).not.toMatch(/max-h-0/);
+		expect(result.code).toMatch(/_dur001 \$\{/);
+	});
+
 	it("rewrites target helper calls including templates, objects and arrays", () => {
 		const result = transformJs(
 			`

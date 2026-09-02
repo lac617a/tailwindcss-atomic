@@ -23,6 +23,11 @@ import {
 	transformJs,
 } from "../shared/js";
 import {isHtmlFile, transformHtml} from "../shared/html";
+import {
+	generateRuntimeModule,
+	VIRTUAL_RUNTIME_IMPORT,
+	VIRTUAL_RUNTIME_RESOLVED,
+} from "../shared/virtual-runtime";
 import {UnpluginFactory} from "unplugin";
 
 export async function transformAtomicSource(code: string, id: string) {
@@ -166,6 +171,18 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 	return {
 		name: "tailwind-atomic-plugin",
 		enforce: "post",
+
+		resolveId(id: string) {
+			if (id === VIRTUAL_RUNTIME_IMPORT || id === VIRTUAL_RUNTIME_RESOLVED) {
+				return VIRTUAL_RUNTIME_RESOLVED;
+			}
+		},
+
+		load(id: string) {
+			if (id === VIRTUAL_RUNTIME_RESOLVED) {
+				return generateRuntimeModule();
+			}
+		},
 
 		async buildStart() {
 			await warmupClassMapFromCss();

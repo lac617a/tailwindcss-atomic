@@ -1,6 +1,6 @@
 {
 	"name": "tailwindcss-atomic",
-	"version": "1.0.13",
+	"version": "1.0.14",
 	"license": "MIT",
 	"type": "module",
 	"author": "lac617a <dominyel.r@gmail.com>",
@@ -117,10 +117,14 @@
 	"peerDependencies": {
 		"postcss": "^8.0.0",
 		"sass": ">=1.60",
+		"tailwind-merge": ">=2",
 		"webpack": ">=5"
 	},
 	"peerDependenciesMeta": {
 		"sass": {
+			"optional": true
+		},
+		"tailwind-merge": {
 			"optional": true
 		},
 		"webpack": {

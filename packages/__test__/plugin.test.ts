@@ -32,6 +32,20 @@ describe("plugin adapters", () => {
 		expect(plugins[0]?.enforce).toBe("pre");
 		expect(typeof plugins[1]).toBe("object");
 	});
+
+	it("serves the virtual runtime module", () => {
+		const plugin = factory() as {
+			resolveId?: (id: string) => string | undefined;
+			load?: (id: string) => string | undefined;
+		};
+		expect(plugin.resolveId?.("virtual:tailwind-atomic/runtime")).toBe(
+			"\0tailwind-atomic-runtime",
+		);
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const source = plugin.load?.("\0tailwind-atomic-runtime");
+		expect(source).toContain("atomicReconcile");
+		expect(source).toContain("_aaaaaa");
+	});
 });
 
 describe("transformViteCss", () => {

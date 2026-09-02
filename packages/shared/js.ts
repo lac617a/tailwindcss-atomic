@@ -1,6 +1,7 @@
 import {parse} from "@babel/parser";
 import generateImport from "@babel/generator";
 import traverseImport from "@babel/traverse";
+import * as t from "@babel/types";
 import {lstatSync, realpathSync} from "node:fs";
 import path from "node:path";
 import type {Node} from "@babel/types";
@@ -10,6 +11,12 @@ import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
 import {getCalleeName} from "./utils";
 import {processArgument, processCvaCall} from "../core/process";
+import {
+	RECONCILE_CALLEES,
+	RUNTIME_FN,
+	VIRTUAL_RUNTIME_IMPORT,
+	VIRTUAL_RUNTIME_RESOLVED,
+} from "./virtual-runtime";
 
 function interopDefault<T>(mod: T | {default: T}): T {
 	let current: unknown = mod;
@@ -128,7 +135,24 @@ function clearLinkedPackageCache() {
 	linkedPackageCache.clear();
 }
 
+function invalidateAtomicRuntimeModule() {
+	const server = ATOMIC_RUNTIME.viteServer;
+	if (!server?.moduleGraph) return;
+	for (const [id, mod] of server.moduleGraph.idToModuleMap) {
+		if (!mod) continue;
+		if (
+			id === VIRTUAL_RUNTIME_RESOLVED ||
+			id === VIRTUAL_RUNTIME_IMPORT ||
+			id.includes("tailwind-atomic-runtime") ||
+			id.includes("virtual:tailwind-atomic/runtime")
+		) {
+			server.moduleGraph.invalidateModule(mod);
+		}
+	}
+}
+
 function invalidateJsModules() {
+	invalidateAtomicRuntimeModule();
 	const server = ATOMIC_RUNTIME.viteServer;
 	if (server?.moduleGraph) {
 		for (const [id, mod] of server.moduleGraph.idToModuleMap) {
@@ -223,6 +247,42 @@ function rewriteBoundClassName(
 	return rewriteMappedClassNode(init, classMap);
 }
 
+function alreadyReconciled(path: NodePath) {
+	const parent = path.parentPath;
+	if (!parent?.isCallExpression()) return false;
+	return getCalleeName(parent.node.callee) === RUNTIME_FN;
+}
+
+function hasRuntimeImport(ast: {program: {body: Node[]}}) {
+	return ast.program.body.some(
+		(node) =>
+			node.type === "ImportDeclaration" &&
+			node.source.value === VIRTUAL_RUNTIME_IMPORT,
+	);
+}
+
+function injectRuntimeImport(ast: {
+	program: {body: Node[]; directives?: {value: {value: string}}[]};
+}) {
+	if (hasRuntimeImport(ast)) return;
+	const importDecl = t.importDeclaration(
+		[t.importSpecifier(t.identifier(RUNTIME_FN), t.identifier("atomicReconcile"))],
+		t.stringLiteral(VIRTUAL_RUNTIME_IMPORT),
+	);
+	const body = ast.program.body;
+	const first = body[0];
+	const afterDirective =
+		first?.type === "ExpressionStatement" &&
+		first.expression.type === "StringLiteral" &&
+		(first.expression.value === "use client" ||
+			first.expression.value === "use server");
+	if (afterDirective) {
+		body.splice(1, 0, importDecl);
+	} else {
+		body.unshift(importDecl);
+	}
+}
+
 function transformJs(code: string, targetFunctions: Set<string>) {
 	if (!code || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
 		return {code: null, map: null};
@@ -235,6 +295,7 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 		});
 
 		let hasModifications = false;
+		let needsRuntime = false;
 		const classMap = ATOMIC_RUNTIME.classMap;
 
 		traverse(ast, {
@@ -262,75 +323,87 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 				}
 			},
 
-			CallExpression(path) {
-				const funcName = getCalleeName(path.node.callee);
+			CallExpression: {
+				enter(path) {
+					const funcName = getCalleeName(path.node.callee);
 
-				if (funcName && ATOMIC_RUNTIME.preserveFunctions.has(funcName)) {
-					return;
-				}
-
-				if (funcName === "cva" && targetFunctions.has("cva")) {
-					if (processCvaCall(path.node.arguments, classMap)) {
-						hasModifications = true;
+					if (funcName && ATOMIC_RUNTIME.preserveFunctions.has(funcName)) {
+						return;
 					}
-					for (const arg of path.get("arguments")) {
-						if (rewriteBoundClassName(arg, classMap)) {
+
+					if (funcName === "cva" && targetFunctions.has("cva")) {
+						if (processCvaCall(path.node.arguments, classMap)) {
 							hasModifications = true;
 						}
-						if (!arg.isObjectExpression()) continue;
-						for (const prop of arg.get("properties")) {
-							if (!prop.isObjectProperty()) continue;
-							const value = prop.get("value");
-							if (rewriteBoundClassName(value, classMap)) {
+						for (const arg of path.get("arguments")) {
+							if (rewriteBoundClassName(arg, classMap)) {
 								hasModifications = true;
 							}
-							if (!value.isObjectExpression()) continue;
-							for (const nested of value.get("properties")) {
-								if (!nested.isObjectProperty()) continue;
-								if (rewriteBoundClassName(nested.get("value"), classMap)) {
+							if (!arg.isObjectExpression()) continue;
+							for (const prop of arg.get("properties")) {
+								if (!prop.isObjectProperty()) continue;
+								const value = prop.get("value");
+								if (rewriteBoundClassName(value, classMap)) {
 									hasModifications = true;
+								}
+								if (!value.isObjectExpression()) continue;
+								for (const nested of value.get("properties")) {
+									if (!nested.isObjectProperty()) continue;
+									if (rewriteBoundClassName(nested.get("value"), classMap)) {
+										hasModifications = true;
+									}
 								}
 							}
 						}
-					}
-				} else if (funcName && targetFunctions.has(funcName)) {
-					path.get("arguments").forEach((arg) => {
-						if (processArgument(arg.node, classMap)) {
-							hasModifications = true;
-						}
-						if (rewriteBoundClassName(arg, classMap)) {
-							hasModifications = true;
-						}
-					});
-				}
-
-				if (
-					funcName === "jsx" ||
-					funcName === "jsxs" ||
-					funcName === "_jsx" ||
-					funcName === "_jsxs" ||
-					funcName === "jsxDEV"
-				) {
-					const props = path.node.arguments[1];
-					if (props && props.type === "ObjectExpression") {
-						props.properties.forEach((prop) => {
-							if (prop.type !== "ObjectProperty") return;
-
-							let key: string | undefined;
-							if (!prop.computed && prop.key.type === "Identifier") {
-								key = prop.key.name;
-							} else if (prop.key.type === "StringLiteral") {
-								key = prop.key.value;
+					} else if (funcName && targetFunctions.has(funcName)) {
+						path.get("arguments").forEach((arg) => {
+							if (processArgument(arg.node, classMap)) {
+								hasModifications = true;
 							}
-
-							if (key === "className" || key === "class") {
-								if (processArgument(prop.value, classMap)) {
-									hasModifications = true;
-								}
+							if (rewriteBoundClassName(arg, classMap)) {
+								hasModifications = true;
 							}
 						});
 					}
-				}
+
+					if (
+						funcName === "jsx" ||
+						funcName === "jsxs" ||
+						funcName === "_jsx" ||
+						funcName === "_jsxs" ||
+						funcName === "jsxDEV"
+					) {
+						const props = path.node.arguments[1];
+						if (props && props.type === "ObjectExpression") {
+							props.properties.forEach((prop) => {
+								if (prop.type !== "ObjectProperty") return;
+
+								let key: string | undefined;
+								if (!prop.computed && prop.key.type === "Identifier") {
+									key = prop.key.name;
+								} else if (prop.key.type === "StringLiteral") {
+									key = prop.key.value;
+								}
+
+								if (key === "className" || key === "class") {
+									if (processArgument(prop.value, classMap)) {
+										hasModifications = true;
+									}
+								}
+							});
+						}
+					}
+				},
+				exit(path) {
+					const funcName = getCalleeName(path.node.callee);
+					if (!funcName || !RECONCILE_CALLEES.has(funcName)) return;
+					if (alreadyReconciled(path)) return;
+					path.replaceWith(
+						t.callExpression(t.identifier(RUNTIME_FN), [path.node]),
+					);
+					hasModifications = true;
+					needsRuntime = true;
+				},
 			},
 
 			VariableDeclarator(path) {
@@ -359,6 +432,8 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 		});
 
 		if (!hasModifications) return {code: null, map: null};
+
+		if (needsRuntime) injectRuntimeImport(ast);
 
 		const output = generate(ast, {}, code);
 

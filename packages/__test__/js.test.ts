@@ -118,19 +118,36 @@ describe("transformJs", () => {
 		expect(result.code).toMatch(/_dur001 \$\{/);
 	});
 
-	it("rewrites target helper calls including templates, objects and arrays", () => {
+	it("wraps cn() so twMerge can resolve hashed className props", () => {
+		ATOMIC_RUNTIME.classMap["absolute"] = "_abs001";
+		ATOMIC_RUNTIME.classMap["hidden"] = "_cccccc";
+		ATOMIC_RUNTIME.classMap["sm:flex"] = "_smf001";
+		ATOMIC_RUNTIME.classMap["-right-12"] = "_r12001";
+		ATOMIC_RUNTIME.classMap["-right-6"] = "_r06001";
 		const result = transformJs(
 			`
-			cn("flex", cond && "p-6", cond ? "flex" : "hidden");
-			cn(\`flex extra\`);
-			cn({ flex: true, "p-6": false });
-			cn(["flex", "p-6"]);
+			function CarouselNext({ className, orientation }) {
+				return (
+					<Button
+						className={cn(
+							"absolute",
+							orientation === "horizontal" ? "-right-12" : "-bottom-12",
+							className,
+						)}
+					/>
+				);
+			}
+			export const n = <CarouselNext className="hidden sm:flex -right-6" />;
 			`,
 			new Set(["cn"]),
 		);
-		expect(result.code).toContain("_aaaaaa");
-		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_twAtomicReconcile");
+		expect(result.code).toContain("virtual:tailwind-atomic/runtime");
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toContain("_r12001");
 		expect(result.code).toContain("_cccccc");
+		expect(result.code).toContain("_smf001");
+		expect(result.code).toContain("_r06001");
 	});
 
 	it("rewrites jsx runtime props for className and class", () => {

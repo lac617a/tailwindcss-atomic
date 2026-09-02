@@ -330,6 +330,18 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 				}
 			},
 
+			ArrayExpression(path) {
+				const els = path.node.elements.filter(
+					(el): el is NonNullable<typeof el> => Boolean(el),
+				);
+				if (!els.length || !els.every((el) => el.type === "StringLiteral")) {
+					return;
+				}
+				if (rewriteMappedClassNode(path.node, classMap)) {
+					hasModifications = true;
+				}
+			},
+
 			ExportDefaultDeclaration(path) {
 				if (rewriteMappedClassNode(path.node.declaration, classMap)) {
 					hasModifications = true;

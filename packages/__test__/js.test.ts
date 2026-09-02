@@ -167,6 +167,23 @@ describe("transformJs", () => {
 		expect(result.code).not.toMatch(/"hidden"/);
 	});
 
+	it("rewrites Rollup preserveModules output with a 'use client' banner", () => {
+		ATOMIC_RUNTIME.classMap["items-center"] = "_item01";
+		ATOMIC_RUNTIME.classMap["justify-center"] = "_just02";
+		ATOMIC_RUNTIME.classMap["whitespace-nowrap"] = "_white3";
+		ATOMIC_RUNTIME.classMap["font-medium"] = "_font04";
+		ATOMIC_RUNTIME.classMap["transition-colors"] = "_trans5";
+		ATOMIC_RUNTIME.classMap["text-sm"] = "_cafc46 _ffc2a9";
+		const result = transformJs(
+			`'use client';\nimport { cva } from 'class-variance-authority';\nimport classNameVariantColorScheme from './classNameVariantColorScheme.js';\nvar classNameDefault = ["flex", "items-center", "justify-center", "whitespace-nowrap", "font-medium", "transition-colors"];\nvar chipsCva = cva(classNameDefault, {\n  variants: {\n    colorScheme: classNameVariantColorScheme,\n    size: { sm: ["text-sm"] }\n  }\n});\nexport { chipsCva };\n`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_item01");
+		expect(result.code).not.toMatch(/"flex"/);
+		expect(result.code).not.toMatch(/"items-center"/);
+	});
+
 	it("rewrites exported variant objects that are not inlined into cva", () => {
 		const result = transformJs(
 			`

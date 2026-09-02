@@ -10,6 +10,7 @@ import {
 	listAppDependencyNames,
 	readPackageName,
 } from "./shared/workspace";
+import {UnpluginFactoryOptions} from "./types";
 
 const req = createRequire(import.meta.url);
 
@@ -31,16 +32,15 @@ type TurboRule =
 			default?: TurboRule | false;
 	  };
 
-/** Accepts Next.js `NextConfig` (`webpack` may be a hook, `null`, or omitted). */
-type NextConfigInput = {
+/** Fields we read from Next.js config. `T extends object` so Next's own types stay assignable. */
+type NextConfigFields = {
 	webpack?: ((...args: never[]) => unknown) | null;
 	transpilePackages?: string[];
 	outputFileTracingRoot?: string;
 	turbopack?: {
 		root?: string;
 		rules?: Record<string, unknown>;
-		[key: string]: unknown;
-	};
+	} | null;
 };
 
 type AtomicNextConfig<T> = Omit<
@@ -52,7 +52,6 @@ type AtomicNextConfig<T> = Omit<
 	turbopack: {
 		root: string;
 		rules: Record<string, TurboRule | TurboRule[]>;
-		[key: string]: unknown;
 	};
 	webpack: (
 		config: Configuration,
@@ -60,9 +59,8 @@ type AtomicNextConfig<T> = Omit<
 	) => Configuration;
 };
 
-type AtomicNextOptions = Parameters<typeof webpackTailwindAtomic>[0] & {
-	cssEntries?: string[];
-};
+type AtomicNextOptions = Parameters<typeof webpackTailwindAtomic>[0] &
+	UnpluginFactoryOptions;
 
 function resolveAtomicLoader() {
 	try {
@@ -100,7 +98,7 @@ function turboLoaderRules(atomicLoader: string): Record<string, TurboRule> {
 }
 
 function collectTranspilePackages(
-	nextConfig: NextConfigInput,
+	nextConfig: NextConfigFields,
 	options: AtomicNextOptions,
 ) {
 	const names = new Set<string>([
@@ -138,12 +136,13 @@ function callUserWebpack(
 	return (webpackHook as NextWebpackHook)(config, webpackOptions) ?? config;
 }
 
-export function withTailwindAtomic<T extends NextConfigInput = NextConfigInput>(
+export function withTailwindAtomic<T extends object = NextConfigFields>(
 	nextConfig: T = {} as T,
 	options: AtomicNextOptions = {},
 ): AtomicNextConfig<T> {
+	const config = nextConfig as T & NextConfigFields;
 	const atomicLoader = resolveAtomicLoader();
-	const transpilePackages = collectTranspilePackages(nextConfig, options);
+	const transpilePackages = collectTranspilePackages(config, options);
 	for (const pkg of transpilePackages) {
 		ATOMIC_RUNTIME.transpilePackages.add(pkg);
 	}
@@ -155,46 +154,42 @@ export function withTailwindAtomic<T extends NextConfigInput = NextConfigInput>(
 	}
 
 	const monorepoRoot = findMonorepoRoot(process.cwd());
+	const userWebpack = config.webpack;
 	const turbopackRoot =
-		nextConfig.turbopack?.root ??
-		nextConfig.outputFileTracingRoot ??
-		monorepoRoot;
+		config.turbopack?.root ?? config.outputFileTracingRoot ?? monorepoRoot;
 
 	return {
-		...nextConfig,
-		...(nextConfig.outputFileTracingRoot
+		...config,
+		...(config.outputFileTracingRoot
 			? {}
 			: {outputFileTracingRoot: turbopackRoot}),
 		transpilePackages: [
-			...new Set([
-				...(nextConfig.transpilePackages ?? []),
-				...transpilePackages,
-			]),
+			...new Set([...(config.transpilePackages ?? []), ...transpilePackages]),
 		],
 		turbopack: {
-			...nextConfig.turbopack,
+			...config.turbopack,
 			root: turbopackRoot,
 			rules: {
 				...turboLoaderRules(atomicLoader),
-				...nextConfig.turbopack?.rules,
+				...config.turbopack?.rules,
 			},
 		},
-		webpack(config: Configuration, webpackOptions: NextWebpackOptions) {
+		webpack(webpackConfig: Configuration, webpackOptions: NextWebpackOptions) {
 			process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= process.cwd();
 			ATOMIC_RUNTIME.projectRoots.unshift(process.cwd());
 			ATOMIC_RUNTIME.projectRoots.push(monorepoRoot);
 
-			config.plugins ??= [];
-			config.plugins.push(
+			webpackConfig.plugins ??= [];
+			webpackConfig.plugins.push(
 				webpackTailwindAtomic({
 					...options,
 					transpilePackages,
 				}),
 			);
 
-			config.module ??= {rules: []};
-			config.module.rules ??= [];
-			config.module.rules.unshift({
+			webpackConfig.module ??= {rules: []};
+			webpackConfig.module.rules ??= [];
+			webpackConfig.module.rules.unshift({
 				test: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
 				exclude: (resource: string) => shouldSkipJsTransform(resource),
 				enforce: "pre",
@@ -202,10 +197,10 @@ export function withTailwindAtomic<T extends NextConfigInput = NextConfigInput>(
 			});
 
 			if (process.platform === "win32" && webpackOptions.dev) {
-				config.cache = {type: "memory"};
+				webpackConfig.cache = {type: "memory"};
 			}
 
-			return callUserWebpack(nextConfig.webpack, config, webpackOptions);
+			return callUserWebpack(userWebpack, webpackConfig, webpackOptions);
 		},
 	} as AtomicNextConfig<T>;
 }

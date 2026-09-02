@@ -87,15 +87,26 @@ describe("withTailwindAtomic", () => {
 			headers?: () => Promise<
 				{source: string; headers: {key: string; value: string}[]}[]
 			>;
+			turbopack?: {
+				root?: string;
+				rules?: Record<string, {loaders?: string[]; as?: string}>;
+				resolveAlias?: Record<string, string | string[]>;
+				resolveExtensions?: string[];
+			};
 		};
 
 		const nextConfig: NextJsNextConfig = {
 			reactCompiler: true,
 			webpack: null,
 			headers: async () => [],
+			turbopack: {
+				root: "/tmp/app",
+				resolveExtensions: [".tsx", ".ts"],
+			},
 		};
 		const wrapped = withTailwindAtomic(nextConfig);
 		expect(wrapped.reactCompiler).toBe(true);
+		expect(wrapped.turbopack.root).toBe("/tmp/app");
 		expect(typeof wrapped.webpack).toBe("function");
 
 		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};

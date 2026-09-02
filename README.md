@@ -6,7 +6,7 @@
 
 Monorepo de **tailwindcss-atomic**: un plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
 
-El motor de hashing y atomicización vive en **Rust compilado a WebAssembly** (`src/`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild y Next.js.
+El motor de hashing y atomicización vive en **Rust compilado a WebAssembly** (`src/`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
 
 ## Qué hace
 
@@ -35,6 +35,8 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | `app/vite-app/` | Vite · React 18 · Tailwind 3 |
 | `app/next12-app/` | Next.js 12 · Pages Router · Tailwind 3 |
 | `app/next-turbo-app/` | Next.js 15 · App Router · Turbopack |
+| `app/vite-v4-app/` | Vite · React 18 · Tailwind 4 |
+| `app/astro-app/` | Astro 5 · Tailwind 4 |
 
 SCSS con `@use 'tailwindcss/base|components|utilities'` (Tailwind 3 + Next 15) está documentado en [`packages/README.md`](packages/README.md).
 
@@ -58,7 +60,9 @@ pnpm dev            # Next 15 · http://localhost:3016
 pnpm dev:vite       # Vite · http://localhost:3017
 pnpm dev:next12     # Next 12 · http://localhost:3018
 pnpm dev:turbo      # Next 15 Turbopack · http://localhost:3019
-pnpm dev:examples   # los cuatro a la vez (Turborepo)
+pnpm dev:vite4      # Vite · Tailwind 4 · http://localhost:3020
+pnpm dev:astro      # Astro 5 · http://localhost:3021
+pnpm dev:examples   # todos los ejemplos a la vez (Turborepo)
 ```
 
 Scripts sueltos:

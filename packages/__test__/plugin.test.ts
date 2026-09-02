@@ -5,6 +5,7 @@ import vite from "../vite";
 import webpack from "../webpack";
 import rollup from "../rollup";
 import esbuild from "../esbuild";
+import astro from "../astro";
 import {transformViteCss} from "../shared/vite-css";
 import {ATOMIC_RUNTIME} from "../shared/constants";
 
@@ -23,6 +24,7 @@ describe("plugin adapters", () => {
 		expect(typeof webpack).toBe("function");
 		expect(typeof rollup).toBe("function");
 		expect(typeof esbuild).toBe("function");
+		expect(typeof astro).toBe("function");
 	});
 
 	it("returns a CSS pre-plugin plus the unplugin Vite adapter", () => {
@@ -45,6 +47,7 @@ describe("plugin adapters", () => {
 		const source = plugin.load?.("\0tailwind-atomic-runtime");
 		expect(source).toContain("atomicReconcile");
 		expect(source).toContain("_aaaaaa");
+		expect(source).not.toContain('from "tailwind-merge"');
 	});
 });
 

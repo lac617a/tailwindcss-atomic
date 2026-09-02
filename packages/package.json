@@ -1,10 +1,10 @@
 {
 	"name": "tailwindcss-atomic",
-	"version": "1.0.14",
+	"version": "1.0.15",
 	"license": "MIT",
 	"type": "module",
 	"author": "lac617a <dominyel.r@gmail.com>",
-	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup and next.js!",
+	"description": "atomic css classes for tailwindcss. support vite, webpack, rollup, next.js and astro!",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
@@ -61,6 +61,16 @@
 			"require": {
 				"types": "./dist/vite.d.cts",
 				"default": "./dist/vite.cjs"
+			}
+		},
+		"./astro": {
+			"import": {
+				"types": "./dist/astro.d.mts",
+				"default": "./dist/astro.mjs"
+			},
+			"require": {
+				"types": "./dist/astro.d.cts",
+				"default": "./dist/astro.cjs"
 			}
 		},
 		"./webpack": {

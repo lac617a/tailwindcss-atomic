@@ -1,4 +1,5 @@
 import {createRequire} from "node:module";
+import {readFileSync} from "node:fs";
 import path from "node:path";
 
 import {ATOMIC_RUNTIME} from "./constants";
@@ -7,7 +8,23 @@ const VIRTUAL_RUNTIME_IMPORT = "virtual:tailwind-atomic/runtime";
 const VIRTUAL_RUNTIME_RESOLVED = "\0tailwind-atomic-runtime";
 const RUNTIME_FN = "_twAtomicReconcile";
 
-const RECONCILE_CALLEES = new Set(["cn", "twMerge", "clsxMerge"]);
+function packageDeclaresTwMerge(root: string) {
+	try {
+		const pkgPath = path.join(root, "package.json");
+		const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+			name?: string;
+			dependencies?: Record<string, string>;
+			devDependencies?: Record<string, string>;
+		};
+		if (pkg.name === "tailwindcss-atomic") return false;
+		return Boolean(
+			pkg.dependencies?.["tailwind-merge"] ||
+			pkg.devDependencies?.["tailwind-merge"],
+		);
+	} catch {
+		return false;
+	}
+}
 
 function projectHasTwMerge() {
 	const roots = [
@@ -17,6 +34,7 @@ function projectHasTwMerge() {
 	].filter((dir): dir is string => Boolean(dir));
 
 	for (const root of roots) {
+		if (!packageDeclaresTwMerge(root)) continue;
 		try {
 			createRequire(path.join(root, "package.json")).resolve("tailwind-merge");
 			return true;
@@ -88,7 +106,6 @@ export {
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
 	RUNTIME_FN,
-	RECONCILE_CALLEES,
 	generateRuntimeModule,
 	projectHasTwMerge,
 };

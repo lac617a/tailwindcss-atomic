@@ -22,7 +22,12 @@ import {
 	shouldSkipJsTransform,
 	transformJs,
 } from "../shared/js";
-import {isHtmlFile, transformHtml} from "../shared/html";
+import {
+	astroResourceType,
+	isAstroFile,
+	isHtmlFile,
+	transformHtml,
+} from "../shared/html";
 import {
 	generateRuntimeModule,
 	VIRTUAL_RUNTIME_IMPORT,
@@ -198,7 +203,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 				return !shouldIgnoreCss(cleanId) && !cleanId.includes("/.next/");
 			}
 
-			if (isHtmlFile(cleanId)) {
+			if (isHtmlFile(cleanId) || isAstroFile(cleanId)) {
 				return true;
 			}
 
@@ -229,6 +234,28 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 
 			if (isHtmlFile(id)) {
 				const next = transformHtml(code);
+				if (next === code) return null;
+				return {code: next, map: null};
+			}
+
+			if (isAstroFile(id)) {
+				if (astroResourceType(id) === "style") {
+					if (shouldIgnoreCss(id) || isViteCssJsWrapper(code)) {
+						return null;
+					}
+					const {code: next, changed} = processCssAndMaybeInvalidate(
+						code,
+						id,
+					);
+					if (!changed) return null;
+					return {code: next, map: null};
+				}
+
+				let next = transformHtml(code);
+				if (!shouldSkipJsTransform(id)) {
+					const result = transformJs(next, targetFunctions);
+					if (result.code) next = result.code;
+				}
 				if (next === code) return null;
 				return {code: next, map: null};
 			}

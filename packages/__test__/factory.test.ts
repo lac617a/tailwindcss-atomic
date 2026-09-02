@@ -100,6 +100,7 @@ describe("factory plugin", () => {
 		expect(plugin.transformInclude("src/app.tsx")).toBe(true);
 		expect(plugin.transformInclude("src/index.css")).toBe(true);
 		expect(plugin.transformInclude("index.html")).toBe(true);
+		expect(plugin.transformInclude("src/pages/index.astro")).toBe(true);
 		expect(plugin.transformInclude("src/Button.module.css")).toBe(false);
 		expect(
 			plugin.transformInclude("node_modules/slick-carousel/slick/slick.css"),
@@ -165,6 +166,11 @@ describe("factory plugin", () => {
 		expect(await plugin.transform("const x = 1;", "readme.md")).toBeNull();
 		const html = await plugin.transform('<div class="flex"></div>', "index.html");
 		expect(html?.code).toContain("_aaaaaa");
+		const astro = await plugin.transform(
+			`export default () => renderTemplate\`<div class="flex"></div>\`;`,
+			"src/pages/index.astro",
+		);
+		expect(astro?.code).toContain("_aaaaaa");
 	});
 
 	it("wires Vite root and server", async () => {

@@ -2,7 +2,7 @@
 
 Plugin para **Tailwind CSS** que convierte cada declaración en una clase atómica (`_aa7b5f`) y reescribe los `className` del JavaScript/TypeScript para que coincidan.
 
-Sirve con **PostCSS**, **Vite**, **Webpack**, **Rollup** y **Next.js**.
+Sirve con **PostCSS**, **Vite**, **Webpack**, **Rollup**, **Next.js** y **Astro**.
 
 ## Instalación
 
@@ -210,6 +210,50 @@ export default defineConfig({
 
 Ejemplo: `app/vite-v4-app` (`pnpm dev:vite4`, puerto 3020).
 
+## Astro (Tailwind 4)
+
+Astro usa Vite. Tailwind v4 va con `@tailwindcss/vite` (no `@astrojs/tailwind`). La integración `tailwindcss-atomic/astro` inyecta el rewrite de `class` en `.astro`, JS extraído y CSS:
+
+```ts
+// astro.config.ts
+import {defineConfig} from "astro/config";
+import tailwindcss from "@tailwindcss/vite";
+import tailwindAtomic from "tailwindcss-atomic/astro";
+
+export default defineConfig({
+	integrations: [tailwindAtomic()],
+	vite: {
+		plugins: [tailwindcss()],
+	},
+});
+```
+
+```css
+/* src/styles/global.css */
+@import "tailwindcss";
+```
+
+```astro
+---
+import "../styles/global.css";
+---
+<div class="flex p-6">Hola</div>
+```
+
+Si prefieres no usar la integración, el plugin de Vite hace lo mismo:
+
+```ts
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+	vite: {
+		plugins: [tailwindcss(), tailwindAtomic()],
+	},
+});
+```
+
+Ejemplo: `app/astro-app` (`pnpm dev:astro`, puerto 3021).
+
 ## Vite (Tailwind 3)
 
 ```ts
@@ -279,7 +323,7 @@ type Options = {
 };
 ```
 
-Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben atributos JSX `className` / `class`, props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`, y atributos `class` en HTML (`index.html`, assets emitidos).
+Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben atributos JSX `className` / `class`, props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`, atributos `class` en HTML (`index.html`, assets emitidos) y plantillas **Astro** (`.astro`, scripts extraídos y `class:list` estático).
 
 Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`.
 

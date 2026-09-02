@@ -6,14 +6,20 @@ import {
 	shouldIgnoreCss,
 } from "./css";
 import {TAILWIND_DIRECTIVE_RE} from "./constants";
+import {astroResourceType, isAstroFile} from "./html";
 import {invalidateJsModules} from "./js";
+
+function isViteCssTarget(id: string) {
+	if (isCssFile(id)) return true;
+	return isAstroFile(id) && astroResourceType(id) === "style";
+}
 
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);
 }
 
 async function transformViteCss(code: string, id: string) {
-	if (!code || !isCssFile(id) || shouldIgnoreCss(id)) return null;
+	if (!code || !isViteCssTarget(id) || shouldIgnoreCss(id)) return null;
 	if (isViteCssJsWrapper(code)) return null;
 
 	const cssPath = id.split("?")[0] ?? id;

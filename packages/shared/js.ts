@@ -7,12 +7,12 @@ import path from "node:path";
 import type {Node} from "@babel/types";
 import type {NodePath} from "@babel/traverse";
 
-import {ATOMIC_RUNTIME} from "./constants";
+import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "./constants";
 import {transformClassString} from "./css";
+import {isAstroFile} from "./html";
 import {getCalleeName} from "./utils";
 import {processArgument, processCvaCall} from "../core/process";
 import {
-	RECONCILE_CALLEES,
 	RUNTIME_FN,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
@@ -85,9 +85,10 @@ function nodeModulePackage(
 		if (!name || name.startsWith(".")) continue;
 
 		const dirInAnchored = anchored.slice(0, start + name.length);
-		const dir = cleanId.startsWith("/") || /^[a-zA-Z]:\//.test(cleanId)
-			? dirInAnchored
-			: dirInAnchored.replace(/^\//, "");
+		const dir =
+			cleanId.startsWith("/") || /^[a-zA-Z]:\//.test(cleanId)
+				? dirInAnchored
+				: dirInAnchored.replace(/^\//, "");
 		found = {name, dir};
 	}
 
@@ -157,7 +158,7 @@ function invalidateJsModules() {
 	if (server?.moduleGraph) {
 		for (const [id, mod] of server.moduleGraph.idToModuleMap) {
 			if (!mod) continue;
-			if (!isJsFile(id)) continue;
+			if (!isJsFile(id) && !isAstroFile(id)) continue;
 			server.moduleGraph.invalidateModule(mod);
 		}
 	}
@@ -266,7 +267,12 @@ function injectRuntimeImport(ast: {
 }) {
 	if (hasRuntimeImport(ast)) return;
 	const importDecl = t.importDeclaration(
-		[t.importSpecifier(t.identifier(RUNTIME_FN), t.identifier("atomicReconcile"))],
+		[
+			t.importSpecifier(
+				t.identifier(RUNTIME_FN),
+				t.identifier("atomicReconcile"),
+			),
+		],
 		t.stringLiteral(VIRTUAL_RUNTIME_IMPORT),
 	);
 	const body = ast.program.body;
@@ -396,7 +402,7 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 				},
 				exit(path) {
 					const funcName = getCalleeName(path.node.callee);
-					if (!funcName || !RECONCILE_CALLEES.has(funcName)) return;
+					if (!funcName || !DEFAULT_TARGET_FUNCTIONS.has(funcName)) return;
 					if (alreadyReconciled(path)) return;
 					path.replaceWith(
 						t.callExpression(t.identifier(RUNTIME_FN), [path.node]),

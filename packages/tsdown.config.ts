@@ -8,6 +8,7 @@ export default defineConfig({
 		"webpack.ts",
 		"rollup.ts",
 		"vite.ts",
+		"astro.ts",
 		"loader.ts",
 		"esbuild.ts",
 	],

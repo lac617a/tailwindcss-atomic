@@ -296,6 +296,7 @@ describe("invalidateJsModules", () => {
 			moduleGraph: {
 				idToModuleMap: new Map<string, unknown>([
 					["src/app.tsx", {id: "src/app.tsx"}],
+					["src/pages/index.astro", {id: "src/pages/index.astro"}],
 					["src/app.css", {id: "src/app.css"}],
 					["src/empty.ts", null],
 				]),
@@ -304,8 +305,11 @@ describe("invalidateJsModules", () => {
 		};
 
 		invalidateJsModules();
-		expect(invalidateModule).toHaveBeenCalledTimes(1);
+		expect(invalidateModule).toHaveBeenCalledTimes(2);
 		expect(invalidateModule).toHaveBeenCalledWith({id: "src/app.tsx"});
+		expect(invalidateModule).toHaveBeenCalledWith({
+			id: "src/pages/index.astro",
+		});
 	});
 
 	it("invalidates webpack watchers in Next.js dev", () => {

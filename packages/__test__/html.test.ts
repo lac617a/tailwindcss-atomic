@@ -1,5 +1,10 @@
 import {ATOMIC_RUNTIME} from "../shared/constants";
-import {isHtmlFile, transformHtml} from "../shared/html";
+import {
+	astroResourceType,
+	isAstroFile,
+	isHtmlFile,
+	transformHtml,
+} from "../shared/html";
 
 describe("isHtmlFile", () => {
 	it("accepts html extensions", () => {
@@ -7,6 +12,32 @@ describe("isHtmlFile", () => {
 		expect(isHtmlFile("pages/about.htm?v=1")).toBe(true);
 		expect(isHtmlFile("app.tsx")).toBe(false);
 		expect(isHtmlFile("")).toBe(false);
+	});
+});
+
+describe("isAstroFile", () => {
+	it("accepts .astro paths and Vite query strings", () => {
+		expect(isAstroFile("src/pages/index.astro")).toBe(true);
+		expect(
+			isAstroFile("src/pages/index.astro?astro&type=script&index=0&lang.ts"),
+		).toBe(true);
+		expect(isAstroFile("src\\layouts\\Layout.astro")).toBe(true);
+		expect(isAstroFile("index.html")).toBe(false);
+		expect(isAstroFile("")).toBe(false);
+	});
+});
+
+describe("astroResourceType", () => {
+	it("reads style and script from the Vite query", () => {
+		expect(astroResourceType("src/pages/index.astro")).toBe("template");
+		expect(
+			astroResourceType("src/pages/index.astro?astro&type=script&index=0"),
+		).toBe("script");
+		expect(
+			astroResourceType(
+				"src/pages/index.astro?astro&type=style&index=0&lang.css",
+			),
+		).toBe("style");
 	});
 });
 

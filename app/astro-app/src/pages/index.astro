@@ -1,0 +1,82 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ToggleChip from "../components/ToggleChip.astro";
+---
+
+<Layout>
+	<main class="mx-auto flex min-h-full max-w-3xl flex-col gap-8 px-6 py-16">
+		<header class="flex flex-col gap-3 border-8 border-red-500">
+			<p class="text-sm font-medium tracking-wide text-sky-400">
+				Astro · Tailwind CSS 4
+			</p>
+			<h1 class="text-4xl font-semibold tracking-tight text-white">
+				Tailwind Atomic
+			</h1>
+			<p class="max-w-xl text-base leading-7 text-red-400">
+				Inspecciona el DOM: las utilidades (`flex`, `bg-zinc-950`)
+				deben ser hashes `_` + 6 hex. El CSS usa{" "}
+				<code class="rounded bg-zinc-900 px-1.5 py-0.5 text-sky-300">
+					@import "tailwindcss"
+				</code>{" "}
+				y{" "}
+				<code class="rounded bg-zinc-900 px-1.5 py-0.5 text-sky-300">
+					@theme
+				</code>.
+			</p>
+		</header>
+
+		<section class="grid gap-4 md:grid-cols-2">
+			<article class="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+				<h2 class="text-lg font-medium text-white">
+					class estático
+				</h2>
+				<p class="text-sm leading-6 text-zinc-400">
+					Astro compila la plantilla a <code class="text-sky-300">renderTemplate</code>.
+					El plugin reescribe los <code class="text-sky-300">class</code> del HTML
+					y el JS extraído.
+				</p>
+				<div class="flex gap-2">
+					<span class="rounded-lg bg-sky-500 px-3 py-1 text-xs font-semibold text-sky-950">
+						p-6
+					</span>
+					<span class="rounded-lg bg-violet-500 px-3 py-1 text-xs font-semibold text-violet-950">
+						@theme
+					</span>
+				</div>
+			</article>
+
+			<article class="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+				<h2 class="text-lg font-medium text-white">
+					cn() dinámico
+				</h2>
+				<p class="text-sm leading-6 text-zinc-400">
+					También se reescriben strings dentro de{" "}
+					<code class="text-sky-300">cn</code> en el frontmatter. El
+					script del cliente solo intercambia esas clases ya hasheadas.
+				</p>
+				<ToggleChip />
+			</article>
+		</section>
+
+		<section class="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-zinc-700 p-6">
+			<button
+				type="button"
+				class="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-950"
+			>
+				Primario
+			</button>
+			<button
+				type="button"
+				class="rounded-xl border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-100"
+			>
+				Secundario
+			</button>
+			<button
+				type="button"
+				class="rounded-xl bg-rose-500 px-4 py-2 text-sm font-semibold text-white"
+			>
+				Danger
+			</button>
+		</section>
+	</main>
+</Layout>

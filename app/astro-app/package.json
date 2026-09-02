@@ -1,0 +1,19 @@
+{
+	"name": "astro-app",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "astro dev --port 3021",
+		"build": "astro build",
+		"preview": "astro preview --port 3021"
+	},
+	"dependencies": {
+		"tailwindcss-atomic": "workspace:*"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4",
+		"astro": "^5.13.0",
+		"tailwindcss": "^4",
+		"typescript": "^5"
+	}
+}

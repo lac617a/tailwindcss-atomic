@@ -1,10 +1,31 @@
 import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
 
+function cleanModuleId(id: string) {
+	return id.split("?")[0]?.replace(/\\/g, "/") ?? "";
+}
+
 function isHtmlFile(id: string) {
-	const cleanId = id.split("?")[0]?.replace(/\\/g, "/");
+	const cleanId = cleanModuleId(id);
 	if (!cleanId) return false;
 	return /\.html?$/.test(cleanId);
+}
+
+function isAstroFile(id: string) {
+	const cleanId = cleanModuleId(id);
+	if (!cleanId) return false;
+	return cleanId.endsWith(".astro");
+}
+
+/**
+ * Astro Vite ids keep the `.astro` path and encode the sub-resource in the
+ * query (`type=style` / `type=script`). The compiled page stays `type=template`.
+ */
+function astroResourceType(id: string): "style" | "script" | "template" {
+	const query = id.includes("?") ? id.slice(id.indexOf("?") + 1) : "";
+	if (/(?:^|&)type=style(?:&|$)/.test(query)) return "style";
+	if (/(?:^|&)type=script(?:&|$)/.test(query)) return "script";
+	return "template";
 }
 
 /**
@@ -24,4 +45,4 @@ function transformHtml(html: string) {
 	);
 }
 
-export {isHtmlFile, transformHtml};
+export {isHtmlFile, isAstroFile, astroResourceType, transformHtml};

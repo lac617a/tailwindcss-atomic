@@ -270,6 +270,27 @@ fn wrap_at_rule(kind: &str, prelude: &str, inner: &str) -> String {
     }
 }
 
+fn resolve_nested_selector(parent: Option<&str>, nested: &str) -> String {
+    let nested = nested.trim();
+    let Some(parent) = parent.map(str::trim).filter(|sel| !sel.is_empty()) else {
+        return nested.to_string();
+    };
+    if nested.is_empty() || nested == "&" {
+        return parent.to_string();
+    }
+    if nested.contains('&') {
+        return nested.replace('&', parent);
+    }
+    if nested.starts_with(':') || nested.starts_with('[') {
+        return format!("{parent}{nested}");
+    }
+    nested.to_string()
+}
+
+fn has_declarations(block: &DeclarationBlock<'_>) -> bool {
+    block.iter().next().is_some()
+}
+
 struct EmitCtx<'a> {
     class_map: &'a mut HashMap<String, Vec<String>>,
     seen: &'a mut HashSet<String>,
@@ -321,25 +342,46 @@ fn emit_style_rule(
     css
 }
 
-fn emit_rules(rules: &[CssRule<'_>], ctx: &mut EmitCtx<'_>) -> String {
+fn emit_at_rule_or_original(
+    kind: &str,
+    prelude: &str,
+    inner: String,
+    original: &CssRule<'_>,
+    out: &mut String,
+) {
+    if inner.trim().is_empty() {
+        out.push_str(&to_css(original));
+        out.push('\n');
+        return;
+    }
+    out.push_str(&wrap_at_rule(kind, prelude, &inner));
+}
+
+fn emit_rules(
+    rules: &[CssRule<'_>],
+    parent_selector: Option<&str>,
+    ctx: &mut EmitCtx<'_>,
+) -> String {
     let mut out = String::new();
     for rule in rules {
         match rule {
             CssRule::LayerBlock(layer) => {
-                out.push_str(&emit_rules(&layer.rules.0, ctx));
+                out.push_str(&emit_rules(&layer.rules.0, parent_selector, ctx));
             }
             CssRule::LayerStatement(_) => {}
             CssRule::Media(media) => {
-                let inner = emit_rules(&media.rules.0, ctx);
-                out.push_str(&wrap_at_rule("media", &to_css(&media.query), &inner));
+                let inner = emit_rules(&media.rules.0, parent_selector, ctx);
+                emit_at_rule_or_original("media", &to_css(&media.query), inner, rule, &mut out);
             }
             CssRule::Supports(supports) => {
-                let inner = emit_rules(&supports.rules.0, ctx);
-                out.push_str(&wrap_at_rule(
+                let inner = emit_rules(&supports.rules.0, parent_selector, ctx);
+                emit_at_rule_or_original(
                     "supports",
                     &to_css(&supports.condition),
-                    &inner,
-                ));
+                    inner,
+                    rule,
+                    &mut out,
+                );
             }
             CssRule::Container(container) => {
                 let prelude = match (&container.name, &container.condition) {
@@ -350,19 +392,57 @@ fn emit_rules(rules: &[CssRule<'_>], ctx: &mut EmitCtx<'_>) -> String {
                     (None, Some(condition)) => to_css(condition),
                     (None, None) => String::new(),
                 };
-                let inner = emit_rules(&container.rules.0, ctx);
-                out.push_str(&wrap_at_rule("container", prelude.trim(), &inner));
+                let inner = emit_rules(&container.rules.0, parent_selector, ctx);
+                emit_at_rule_or_original("container", prelude.trim(), inner, rule, &mut out);
             }
             CssRule::StartingStyle(starting) => {
-                let inner = emit_rules(&starting.rules.0, ctx);
-                out.push_str(&wrap_at_rule("starting-style", "", &inner));
+                let inner = emit_rules(&starting.rules.0, parent_selector, ctx);
+                emit_at_rule_or_original("starting-style", "", inner, rule, &mut out);
+            }
+            CssRule::NestedDeclarations(decls) => {
+                if let Some(selector) = parent_selector {
+                    let atomic = emit_style_rule(selector, &decls.declarations, true, ctx);
+                    if atomic.is_empty() {
+                        out.push_str(&to_css(rule));
+                        out.push('\n');
+                    } else {
+                        out.push_str(&atomic);
+                    }
+                } else {
+                    out.push_str(&to_css(rule));
+                    out.push('\n');
+                }
             }
             CssRule::Style(style) => {
-                let selector = to_css(&style.selectors);
+                let raw_selector = to_css(&style.selectors);
+                let selector = resolve_nested_selector(parent_selector, &raw_selector);
                 let nested_empty = style.rules.0.is_empty();
-                let atomic = emit_style_rule(&selector, &style.declarations, nested_empty, ctx);
-                if !atomic.is_empty() {
-                    out.push_str(&atomic);
+                let theme_tokens = has_theme_custom_properties(&style.declarations);
+                let utility = is_utility_selector(&selector);
+
+                // Skins / componentes con anidación: no desanidar.
+                if (!utility || theme_tokens) && !nested_empty {
+                    out.push_str(&to_css(style));
+                    out.push('\n');
+                    continue;
+                }
+
+                let mut emitted = String::new();
+                if has_declarations(&style.declarations) {
+                    emitted.push_str(&emit_style_rule(
+                        &selector,
+                        &style.declarations,
+                        true,
+                        ctx,
+                    ));
+                }
+                if !nested_empty {
+                    // Tailwind v4: `.lg\:flex { @media { display: flex } }` y `&:hover`.
+                    emitted.push_str(&emit_rules(&style.rules.0, Some(&selector), ctx));
+                }
+
+                if !emitted.is_empty() {
+                    out.push_str(&emitted);
                 } else {
                     out.push_str(&to_css(style));
                     out.push('\n');
@@ -396,7 +476,7 @@ pub fn atomicize_stylesheet(raw_css: &str) -> Result<AtomicOutput, String> {
         seen: &mut seen,
         changed: false,
     };
-    let css = emit_rules(&stylesheet.rules.0, &mut ctx);
+    let css = emit_rules(&stylesheet.rules.0, None, &mut ctx);
     let changed = ctx.changed;
 
     let css_rules: Vec<String> = css
@@ -476,6 +556,81 @@ mod tests {
         assert_ne!(base, sm);
         assert!(out.css.contains("@media"));
         assert!(out.css.contains(&format!(".{sm}")));
+    }
+
+    #[test]
+    fn atomicizes_tailwind_v4_nested_breakpoint_variants() {
+        let out = atomicize_stylesheet(
+            r#"
+.hidden { display: none }
+.items-center { align-items: center }
+.gap-8 { gap: 2rem }
+.lg\:flex {
+  @media (width >= 64rem) {
+    display: flex;
+  }
+}
+"#,
+        )
+        .unwrap();
+
+        let hidden = out.class_map.get("hidden").expect("hidden");
+        let lg_flex = out.class_map.get("lg:flex").expect("lg:flex");
+        assert_ne!(hidden, lg_flex);
+        assert!(out.css.contains("@media"));
+        assert!(out.css.contains(&format!(".{lg_flex}")));
+        assert!(out.css.contains("display: flex"));
+        assert!(!out.css.contains(".lg\\:flex"));
+        assert!(!out.css.contains(".hidden {"));
+    }
+
+    #[test]
+    fn atomicizes_tailwind_v4_nested_hover() {
+        let out = atomicize_stylesheet(
+            r#".hover\:bg-red-500 { &:hover { background-color: red; } }"#,
+        )
+        .unwrap();
+        let hashed = out.class_map.get("hover:bg-red-500").expect("hover");
+        assert!(out.css.contains(&format!(".{hashed}:hover")));
+        assert!(!out.css.contains(".hover\\:bg-red-500"));
+    }
+
+    #[test]
+    fn atomicizes_nested_lg_hover_flex() {
+        let out = atomicize_stylesheet(
+            r#"
+.lg\:hover\:flex {
+  @media (width >= 64rem) {
+    &:hover {
+      display: flex;
+    }
+  }
+}
+"#,
+        )
+        .unwrap();
+        let hashed = out.class_map.get("lg:hover:flex").expect("lg:hover:flex");
+        assert!(out.css.contains("@media"));
+        assert!(out.css.contains(&format!(".{hashed}:hover")));
+        assert!(out.css.contains("display: flex"));
+    }
+
+    #[test]
+    fn atomicizes_lg_flex_inside_media_range_query() {
+        let out = atomicize_stylesheet(
+            r#"
+.hidden { display: none }
+@media (width >= 64rem) {
+  .lg\:flex { display: flex }
+}
+"#,
+        )
+        .unwrap();
+
+        let lg_flex = out.class_map.get("lg:flex").expect("lg:flex");
+        assert!(out.css.contains("@media"));
+        assert!(out.css.contains(&format!(".{lg_flex}")));
+        assert!(out.css.contains("display: flex"));
     }
 
     #[test]

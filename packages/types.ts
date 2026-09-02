@@ -1,3 +1,5 @@
+import {UnpluginFactory} from "unplugin";
+
 type OutputAsset = {
 	type: "asset";
 	fileName: string;
@@ -12,4 +14,25 @@ type OutputChunk = {
 
 type OutputBundle = Record<string, OutputAsset | OutputChunk>;
 
-export type {OutputAsset, OutputChunk, OutputBundle};
+interface UnpluginFactoryOptions {
+	targetFunctions?: Set<string>;
+	tailwindCss?: string;
+	transpilePackages?: string[];
+	ignoreCss?: Array<string | RegExp>;
+	preserveFunctions?: Iterable<string>;
+	classMapFile?: string | boolean;
+	cssEntries?: string[];
+}
+
+type UnpluginFactoryFunction = Partial<UnpluginFactory<UnpluginFactoryOptions>>;
+
+type WebpackCssModule = {resource?: string; userRequest?: string};
+
+export type {
+	OutputAsset,
+	OutputChunk,
+	OutputBundle,
+	WebpackCssModule,
+	UnpluginFactoryFunction,
+	UnpluginFactoryOptions,
+};

@@ -58,6 +58,7 @@ describe("constants", () => {
 		expect(Array.isArray(ATOMIC_RUNTIME.projectRoots)).toBe(true);
 		expect(CSS_ENTRY_CANDIDATES).toContain("app/globals.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("src/index.css");
+		expect(CSS_ENTRY_CANDIDATES).toContain("src/styles/global.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("scss/styles.scss");
 		expect(Array.isArray(ATOMIC_RUNTIME.cssEntries)).toBe(true);
 	});

@@ -1,8 +1,11 @@
-import {UnpluginFactory} from "unplugin";
-
 import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "../shared/constants";
 
-import type {OutputBundle} from "../types";
+import type {
+	OutputBundle,
+	UnpluginFactoryFunction,
+	UnpluginFactoryOptions,
+	WebpackCssModule,
+} from "../types";
 import {process_tailwind_css} from "./wasm";
 import {resolveWebpackLoaderPath} from "../shared/utils";
 import {
@@ -12,8 +15,14 @@ import {
 	warmupClassMapFromCss,
 	shouldIgnoreCss,
 } from "../shared/css";
-import {invalidateJsModules, isJsFile, shouldSkipJsTransform, transformJs} from "../shared/js";
+import {
+	invalidateJsModules,
+	isJsFile,
+	shouldSkipJsTransform,
+	transformJs,
+} from "../shared/js";
 import {isHtmlFile, transformHtml} from "../shared/html";
+import {UnpluginFactory} from "unplugin";
 
 export async function transformAtomicSource(code: string, id: string) {
 	if (!code || !id) return {code: null, map: null};
@@ -71,8 +80,6 @@ function isJsAssetName(fileName: string) {
 	return /\.[cm]?js$/.test(fileName);
 }
 
-type WebpackCssModule = {resource?: string; userRequest?: string};
-
 function cssModuleResource(module: WebpackCssModule) {
 	return module.resource || module.userRequest || "";
 }
@@ -96,7 +103,10 @@ function collectVendorOnlyCssAssets(compilation: {
 			const module = rawModule as WebpackCssModule;
 			const resource = cssModuleResource(module);
 			if (!resource) continue;
-			if (!isCssFile(resource) && !/\.(css|scss|sass|less)(?:\?|$)/i.test(resource)) {
+			if (
+				!isCssFile(resource) &&
+				!/\.(css|scss|sass|less)(?:\?|$)/i.test(resource)
+			) {
 				continue;
 			}
 			cssModules++;
@@ -111,15 +121,9 @@ function collectVendorOnlyCssAssets(compilation: {
 	return vendorOnly;
 }
 
-const factory: UnpluginFactory<{
-	targetFunctions?: Set<string>;
-	tailwindCss?: string;
-	transpilePackages?: string[];
-	ignoreCss?: Array<string | RegExp>;
-	preserveFunctions?: Iterable<string>;
-	classMapFile?: string | boolean;
-	cssEntries?: string[];
-}> = (options = {}) => {
+const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
+	const options = opts ?? {};
+
 	const targetFunctions = new Set(
 		options.targetFunctions || DEFAULT_TARGET_FUNCTIONS,
 	);
@@ -244,20 +248,22 @@ const factory: UnpluginFactory<{
 				ATOMIC_RUNTIME.projectRoots.push(compiler.context);
 			}
 
-			const watching = (
-				compiler as {watching?: {invalidate?: () => void}}
-			).watching;
+			const watching = (compiler as {watching?: {invalidate?: () => void}})
+				.watching;
 			if (watching) {
 				ATOMIC_RUNTIME.webpackWatchings.add(watching);
 			}
 
-			compiler.hooks.watchRun?.tap("tailwind-atomic-plugin", (watchCompiler) => {
-				const next =
-					(watchCompiler as {watching?: {invalidate?: () => void}})
-						.watching ??
-					(compiler as {watching?: {invalidate?: () => void}}).watching;
-				if (next) ATOMIC_RUNTIME.webpackWatchings.add(next);
-			});
+			compiler.hooks.watchRun?.tap(
+				"tailwind-atomic-plugin",
+				(watchCompiler) => {
+					const next =
+						(watchCompiler as {watching?: {invalidate?: () => void}})
+							.watching ??
+						(compiler as {watching?: {invalidate?: () => void}}).watching;
+					if (next) ATOMIC_RUNTIME.webpackWatchings.add(next);
+				},
+			);
 
 			compiler.hooks.watchClose?.tap("tailwind-atomic-plugin", () => {
 				const current = (compiler as {watching?: {invalidate?: () => void}})
@@ -352,15 +358,9 @@ const factory: UnpluginFactory<{
 							for (const fileName of jsFiles) {
 								const asset = assets[fileName];
 								if (!asset) continue;
-								const result = transformJs(
-									assetText(asset),
-									targetFunctions,
-								);
+								const result = transformJs(assetText(asset), targetFunctions);
 								if (result.code) {
-									compilation.updateAsset(
-										fileName,
-										new RawSource(result.code),
-									);
+									compilation.updateAsset(fileName, new RawSource(result.code));
 								}
 							}
 						},

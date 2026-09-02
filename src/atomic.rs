@@ -484,4 +484,39 @@ mod tests {
         assert!(!out.css.contains("@layer"));
         assert!(out.class_map.get("flex").is_some());
     }
+
+    #[test]
+    fn preserves_theme_inline_custom_variant_and_oklch() {
+        let out = atomicize_stylesheet(
+            r#"
+@custom-variant dark (&:is(.dark *));
+@theme inline {
+  --color-background: var(--background);
+  --color-primary: var(--primary);
+}
+:root {
+  --background: oklch(1 0 0);
+  --primary: oklch(0.21 0.006 285.885);
+}
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.92 0.004 286.32);
+}
+.bg-background { background-color: var(--background); }
+.bg-primary { background-color: var(--primary); }
+.flex { display: flex; }
+"#,
+        )
+        .unwrap();
+
+        assert!(out.css.contains("@theme inline"));
+        assert!(out.css.contains("--color-background: var(--background)"));
+        assert!(out.css.contains("@custom-variant dark"));
+        assert!(out.css.contains(":root"));
+        assert!(out.css.contains("oklch"));
+        assert!(out.css.contains(".dark"));
+        assert!(out.class_map.get("flex").is_some());
+        assert!(out.class_map.get("bg-background").is_some());
+        assert!(out.class_map.get("dark").is_none());
+    }
 }

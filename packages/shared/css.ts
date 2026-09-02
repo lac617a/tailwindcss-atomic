@@ -1,5 +1,6 @@
 import postcss from "postcss";
 import {createRequire} from "node:module";
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import path from "node:path";
 import {pathToFileURL} from "node:url";
 import type {
@@ -419,16 +420,28 @@ function atomicizeContainer(container: PostcssRoot) {
 }
 
 function dedupeAtomicRules(root: PostcssRoot) {
-	const seen = new Set<string>();
-	root.walkRules((rule) => {
-		if (!isHashedAtomicSelector(rule.selector)) return;
-		const key = rule.toString().replace(/\s+/g, " ").trim();
-		if (seen.has(key)) {
-			rule.remove();
-			return;
+	function walk(container: PostcssRoot, scope: string) {
+		const local = new Set<string>();
+		for (const node of [...(container.nodes ?? [])]) {
+			if (node.type === "rule" && isHashedAtomicSelector(node.selector)) {
+				const key = node.toString().replace(/\s+/g, " ").trim();
+				const scoped = `${scope}\0${key}`;
+				if (local.has(key) || seenGlobal.has(scoped)) {
+					node.remove();
+					continue;
+				}
+				local.add(key);
+				seenGlobal.add(scoped);
+			} else if (
+				node.type === "atrule" &&
+				NESTED_AT_RULES.has(node.name)
+			) {
+				walk(node as unknown as PostcssRoot, `${scope}@${node.name} ${node.params}`);
+			}
 		}
-		seen.add(key);
-	});
+	}
+	const seenGlobal = new Set<string>();
+	walk(root, "");
 }
 
 function lookupMappedClass(cls: string, classMap: Record<string, string>) {
@@ -445,7 +458,7 @@ function transformClassString(
 ) {
 	if (!classStr) return classStr;
 	return classStr
-		.split(/\s+/)
+		.split(/[\s"']+/)
 		.filter(Boolean)
 		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
@@ -481,10 +494,48 @@ function shouldIgnoreCss(from?: string | null) {
 	return false;
 }
 
+function classMapFilePath() {
+	if (ATOMIC_RUNTIME.classMapFile === false) return undefined;
+	if (typeof ATOMIC_RUNTIME.classMapFile === "string" && ATOMIC_RUNTIME.classMapFile) {
+		return ATOMIC_RUNTIME.classMapFile;
+	}
+	const root =
+		ATOMIC_RUNTIME.projectRoots[0] ||
+		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||
+		process.cwd();
+	if (!root) return undefined;
+	return path.join(root, "node_modules", ".cache", "tailwindcss-atomic", "class-map.json");
+}
+
+function persistClassMap() {
+	const file = classMapFilePath();
+	if (!file) return;
+	try {
+		mkdirSync(path.dirname(file), {recursive: true});
+		writeFileSync(file, JSON.stringify(toPlainMap(ATOMIC_RUNTIME.classMap), null, 2));
+	} catch {
+		// Cache is optional; a missing node_modules should not fail the build.
+	}
+}
+
+function loadPersistedClassMap() {
+	const file = classMapFilePath();
+	if (!file) return false;
+	try {
+		if (!existsSync(file)) return false;
+		const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+		return mergeClassMap(parsed as Record<string, string>);
+	} catch {
+		return false;
+	}
+}
+
 /**
- * Corre el WASM solo sobre utilidades (`.flex`, `.bg-red-500`, …).
+ * Corre el WASM sobre la hoja completa cuando el crate devuelve `css`.
  * Conserva `@theme`, `:root`, preflight, bloques de tokens de skin
  * (`.pokerenchile { --color-*: … }`), componentes SCSS, `@keyframes` y `@media`.
+ * Si el mock de tests no envía `css`, se usa el filtrado JS + `css_rules`.
  */
 function applyAtomicCss(css: string, from?: string) {
 	if (!css) {
@@ -506,6 +557,29 @@ function applyAtomicCss(css: string, from?: string) {
 
 	try {
 		const prev = {...ATOMIC_RUNTIME.classMap};
+		const wasmResult = process_tailwind_css(css) as {
+			class_map?: Record<string, string>;
+			css_rules?: unknown;
+			css?: string;
+			changed?: boolean;
+		};
+
+		if (typeof wasmResult?.css === "string") {
+			if (!wasmResult.changed && !wasmResult.css.trim()) {
+				return {code: css, changed: false};
+			}
+			const mapChanged = mergeClassMap(wasmResult.class_map ?? {});
+			if (!wasmResult.changed && !mapChanged) {
+				return {code: css, changed: false, mapChanged};
+			}
+			if (mapChanged) persistClassMap();
+			return {
+				code: formatAtomicCss(wasmResult.css),
+				changed: true,
+				mapChanged: classMapChangedSince(prev) || mapChanged,
+			};
+		}
+
 		const root = postcss.parse(css);
 		flattenLayerAtRules(root);
 		const changed = atomicizeContainer(root);
@@ -515,6 +589,7 @@ function applyAtomicCss(css: string, from?: string) {
 
 		dedupeAtomicRules(root);
 		const mapChanged = classMapChangedSince(prev);
+		if (mapChanged) persistClassMap();
 		return {
 			code: formatAtomicCss(root.toString()),
 			changed: true,
@@ -713,6 +788,8 @@ async function runWarmup() {
 
 async function warmupClassMapFromCss() {
 	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
+	loadPersistedClassMap();
+	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
 	if (warmupPromise) return warmupPromise;
 
 	warmupPromise = runWarmup()
@@ -745,4 +822,6 @@ export {
 	stripSassModuleRules,
 	prepareWarmupSource,
 	rehydrateClassMapFromCss,
+	persistClassMap,
+	loadPersistedClassMap,
 };

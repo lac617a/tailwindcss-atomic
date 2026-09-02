@@ -83,6 +83,16 @@
 				"default": "./dist/rollup.cjs"
 			}
 		},
+		"./esbuild": {
+			"import": {
+				"types": "./dist/esbuild.d.mts",
+				"default": "./dist/esbuild.mjs"
+			},
+			"require": {
+				"types": "./dist/esbuild.d.cts",
+				"default": "./dist/esbuild.cjs"
+			}
+		},
 		"./postcss": {
 			"types": "./dist/postcss.d.mts",
 			"import": "./dist/postcss.mjs",

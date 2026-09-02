@@ -1,6 +1,4 @@
 /target
-/pkg/.gitignore
-/src
 example.js
 tailwind-compiled.css
 

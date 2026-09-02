@@ -3,6 +3,7 @@ import {
 	ATOMIC_RUNTIME,
 	CSS_ENTRY_CANDIDATES,
 	DEFAULT_TARGET_FUNCTIONS,
+	DEFAULT_PRESERVE_FUNCTIONS,
 	NESTED_AT_RULES,
 	TAILWIND_DIRECTIVE_RE,
 } from "../shared/constants";
@@ -51,7 +52,9 @@ describe("constants", () => {
 		expect(ATOMIC_RUNTIME.viteServer).toBeNull();
 		expect(ATOMIC_RUNTIME.webpackWatchings).toBeInstanceOf(Set);
 		expect(ATOMIC_RUNTIME.transpilePackages).toBeInstanceOf(Set);
-		expect(Array.isArray(ATOMIC_RUNTIME.ignoreCss)).toBe(true);
+		expect(ATOMIC_RUNTIME.ignoreCss).toBeInstanceOf(Array);
+		expect(ATOMIC_RUNTIME.preserveFunctions).toBeInstanceOf(Set);
+		expect(DEFAULT_PRESERVE_FUNCTIONS.has("twIgnore")).toBe(true);
 		expect(Array.isArray(ATOMIC_RUNTIME.projectRoots)).toBe(true);
 		expect(CSS_ENTRY_CANDIDATES).toContain("app/globals.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("src/index.css");

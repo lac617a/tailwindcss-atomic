@@ -211,6 +211,19 @@ describe("applyAtomicCss", () => {
 		expect(code).not.toContain("@layer");
 	});
 
+	it("uses a full stylesheet from WASM when `css` is present", () => {
+		wasmMock.impl = () => ({
+			class_map: {flex: "_aaaaaa"},
+			css_rules: ["._aaaaaa { display: flex }"],
+			css: "._aaaaaa { display: flex }",
+			changed: true,
+		});
+		const {code, changed} = applyAtomicCss(".flex { display: flex }");
+		expect(changed).toBe(true);
+		expect(code).toContain("._aaaaaa { display: flex }");
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe("_aaaaaa");
+	});
+
 	it("keeps utilities when the compiler returns no replacement rules", () => {
 		wasmMock.impl = () => ({class_map: {flex: "_aaaaaa"}, css_rules: null});
 		const css = ".flex { display: flex }";
@@ -317,6 +330,7 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(ATOMIC_RUNTIME.classMap["hover:bg-red-500"]).toMatch(
 			/^_[0-9a-f]{6}$/,
 		);
+		expect(code).toContain(":hover");
 		expect(code).not.toContain(".from-red-500");
 		expect(code).not.toContain(".space-y-4");
 	});
@@ -463,7 +477,9 @@ describe("isUtilityRule", () => {
 		expect(firstRule(".bg-revamp-primary-default { background-color: var(--x) }")).toBe(
 			true,
 		);
-		expect(firstRule(".hover\\:bg-red-500:hover { color: red }")).toBe(true);
+		expect(
+			firstRule(".hover\\:bg-red-500:hover { color: red }"),
+		).toBe(true);
 		expect(
 			firstRule(
 				".placeholder-gray-400::placeholder { color: #9ca3af }",

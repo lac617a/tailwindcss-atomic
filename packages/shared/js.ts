@@ -163,7 +163,10 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 
 		traverse(ast, {
 			JSXAttribute(path) {
-				if (path.node.name.name !== "className") return;
+				const attrName = path.node.name;
+				const name =
+					attrName.type === "JSXIdentifier" ? attrName.name : undefined;
+				if (name !== "className" && name !== "class") return;
 
 				if (path.node.value && path.node.value.type === "StringLiteral") {
 					path.node.value.value = transformClassString(
@@ -185,6 +188,10 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 
 			CallExpression(path) {
 				const funcName = getCalleeName(path.node.callee);
+
+				if (funcName && ATOMIC_RUNTIME.preserveFunctions.has(funcName)) {
+					return;
+				}
 
 				if (funcName === "cva" && targetFunctions.has("cva")) {
 					if (processCvaCall(path.node.arguments, classMap)) {

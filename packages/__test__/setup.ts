@@ -37,6 +37,8 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.targetFunctions = new Set(DEFAULT_TARGET_FUNCTIONS);
 	ATOMIC_RUNTIME.transpilePackages = new Set();
 	ATOMIC_RUNTIME.ignoreCss = [];
+	ATOMIC_RUNTIME.preserveFunctions = new Set(["twIgnore"]);
+	ATOMIC_RUNTIME.classMapFile = false;
 	delete process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
 	clearLinkedPackageCache();
 	if (!fs.existsSync(loaderStubPath)) {

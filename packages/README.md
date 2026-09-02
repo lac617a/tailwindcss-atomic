@@ -165,6 +165,20 @@ export default {
 };
 ```
 
+## esbuild
+
+```js
+import {build} from "esbuild";
+import tailwindAtomic from "tailwindcss-atomic/esbuild";
+
+await build({
+	entryPoints: ["src/main.ts"],
+	bundle: true,
+	outfile: "dist/index.js",
+	plugins: [tailwindAtomic()],
+});
+```
+
 ## Opciones
 
 ```ts
@@ -173,10 +187,22 @@ type Options = {
 	targetFunctions?: Set<string>;
 	/** CSS de Tailwind ya compilado, para precargar el mapa (poco habitual). */
 	tailwindCss?: string;
+	/** Paquetes bajo node_modules cuyo JS sí se reescribe (design systems). */
+	transpilePackages?: string[];
+	/** CSS extra que no se atomiciza (además de node_modules). */
+	ignoreCss?: Array<string | RegExp>;
+	/** Funciones cuyos strings se dejan intactos (por defecto `twIgnore`). */
+	preserveFunctions?: Iterable<string>;
+	/** Inventario JSON del mapa (como `.tw-patch` en tailwindcss-mangle). `false` lo desactiva. */
+	classMapFile?: string | boolean;
 };
 ```
 
-Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben atributos JSX `className` y props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`.
+Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben atributos JSX `className` / `class`, props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`, y atributos `class` en HTML (`index.html`, assets emitidos).
+
+Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`.
+
+El mapa `flex` → `_xxxxxx` se guarda en `node_modules/.cache/tailwindcss-atomic/class-map.json` para que el rewrite de JS/HTML no dependa de que PostCSS haya corrido antes (el mismo patrón de inventario que [tailwindcss-mangle](https://github.com/sonofmagic/tailwindcss-mangle)).
 
 ```ts
 withTailwindAtomic(nextConfig, {
@@ -186,7 +212,9 @@ withTailwindAtomic(nextConfig, {
 
 ## Qué se conserva
 
-El WASM solo toca reglas de utilidad (selectores con `.`). Se dejan intactos `@theme`, `:root`, preflight, `@keyframes` y at-rules anidadas (`@media`, `@supports`, `@container`) en el sentido de que el contenedor se recorre y las utilidades de dentro sí se atomicizan.
+El motor Rust (WASM) solo atomiciza reglas de utilidad. Se dejan intactos `@theme`, `:root`, preflight, `@keyframes` y at-rules anidadas (`@media`, `@supports`, `@container`).
+
+A diferencia de un rename 1:1, cada declaración se vuelve su propia clase; el resto del selector se **conserva** (`._hash:hover`, combinadores de `space-y-*`, el `@media` de `sm:`). Así no se pierde hover ni breakpoints.
 
 ## Licencia
 

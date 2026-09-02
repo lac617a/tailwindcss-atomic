@@ -1,6 +1,8 @@
 export type TailwindCssResult = {
 	class_map: Record<string, string>;
 	css_rules: unknown;
+	css?: string;
+	changed?: boolean;
 };
 
 export function defaultProcessTailwindCss(css: string): TailwindCssResult {

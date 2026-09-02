@@ -13,6 +13,7 @@ function createPlugin(options?: Parameters<typeof factory>[0]) {
 		vite: {
 			configResolved: (config: {root?: string}) => void;
 			configureServer: (server: unknown) => void;
+			transformIndexHtml: (html: string) => string;
 		};
 		rollup: {
 			generateBundle: (
@@ -93,6 +94,7 @@ describe("factory plugin", () => {
 		expect(plugin.transformInclude("app/.next/file.js")).toBe(false);
 		expect(plugin.transformInclude("src/app.tsx")).toBe(true);
 		expect(plugin.transformInclude("src/index.css")).toBe(true);
+		expect(plugin.transformInclude("index.html")).toBe(true);
 		expect(plugin.transformInclude("src/Button.module.css")).toBe(false);
 		expect(
 			plugin.transformInclude("node_modules/slick-carousel/slick/slick.css"),
@@ -156,6 +158,8 @@ describe("factory plugin", () => {
 		expect(result?.code).toContain("_aaaaaa");
 		expect(await plugin.transform("const x = 1;", "app.tsx")).toBeNull();
 		expect(await plugin.transform("const x = 1;", "readme.md")).toBeNull();
+		const html = await plugin.transform('<div class="flex"></div>', "index.html");
+		expect(html?.code).toContain("_aaaaaa");
 	});
 
 	it("wires Vite root and server", async () => {
@@ -168,6 +172,10 @@ describe("factory plugin", () => {
 		const server = {moduleGraph: {idToModuleMap: new Map(), invalidateModule() {}}};
 		plugin.vite.configureServer(server);
 		expect(ATOMIC_RUNTIME.viteServer).toBe(server);
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		expect(plugin.vite.transformIndexHtml('<main class="flex"></main>')).toBe(
+			'<main class="_aaaaaa"></main>',
+		);
 	});
 
 	it("rewrites Rollup CSS assets and JS chunks", () => {
@@ -188,11 +196,19 @@ describe("factory plugin", () => {
 				fileName: "main.js",
 				code: `cn("flex")`,
 			},
+			"index.html": {
+				type: "asset",
+				fileName: "index.html",
+				source: '<div class="flex"></div>',
+			},
 		};
 
 		plugin.rollup.generateBundle({}, bundle);
 		expect(String(bundle["main.css"]?.source)).toContain("/*! tailwind-atomic */");
 		expect(bundle["main.js"]?.code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(String(bundle["index.html"]?.source)).toContain(
+			ATOMIC_RUNTIME.classMap["flex"],
+		);
 	});
 
 	it("leaves Rollup assets unchanged when nothing atomicizes", () => {
@@ -336,6 +352,7 @@ describe("factory webpack hook", () => {
 		await processAssets?.({
 			"main.css": {source: () => ".flex { display: flex }"},
 			"main.js": {source: () => `cn("flex")`},
+			"index.html": {source: () => '<div class="flex"></div>'},
 			"plain.txt": {source: () => "hello"},
 			"buffer.js": {
 				source: () => Buffer.from(`cn("flex")`).toString(),
@@ -343,6 +360,7 @@ describe("factory webpack hook", () => {
 		});
 		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
 		expect(updated["main.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(updated["index.html"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 	});
 
 	it("skips webpack context and assets that do not need work", async () => {

@@ -16,6 +16,8 @@ const DEFAULT_TARGET_FUNCTIONS = new Set([
 	"clsxMerge",
 ]);
 
+const DEFAULT_PRESERVE_FUNCTIONS = new Set(["twIgnore"]);
+
 interface ViteModuleGraph {
 	idToModuleMap: Map<string, unknown>;
 	invalidateModule(mod: unknown): void;
@@ -41,6 +43,8 @@ type AtomicRuntime = {
 	webpackWatchings: Set<WebpackWatchingLike>;
 	transpilePackages: Set<string>;
 	ignoreCss: IgnoreCssPattern[];
+	preserveFunctions: Set<string>;
+	classMapFile: string | false | undefined;
 };
 
 function getAtomicRuntime(): AtomicRuntime {
@@ -56,6 +60,8 @@ function getAtomicRuntime(): AtomicRuntime {
 			webpackWatchings: new Set(),
 			transpilePackages: new Set(),
 			ignoreCss: [],
+			preserveFunctions: new Set(DEFAULT_PRESERVE_FUNCTIONS),
+			classMapFile: undefined,
 		};
 	}
 	const runtime = globalRef[ATOMIC_RUNTIME_KEY];
@@ -67,6 +73,9 @@ function getAtomicRuntime(): AtomicRuntime {
 	}
 	if (!runtime.ignoreCss) {
 		runtime.ignoreCss = [];
+	}
+	if (!runtime.preserveFunctions) {
+		runtime.preserveFunctions = new Set(DEFAULT_PRESERVE_FUNCTIONS);
 	}
 	return runtime;
 }
@@ -99,6 +108,7 @@ export {
 	ATOMIC_RUNTIME,
 	CSS_ENTRY_CANDIDATES,
 	DEFAULT_TARGET_FUNCTIONS,
+	DEFAULT_PRESERVE_FUNCTIONS,
 };
 
 export type {IgnoreCssPattern};

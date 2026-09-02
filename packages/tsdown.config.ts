@@ -9,6 +9,7 @@ export default defineConfig({
 		"rollup.ts",
 		"vite.ts",
 		"loader.ts",
+		"esbuild.ts",
 	],
 	format: ["esm", "cjs"],
 	platform: "node",

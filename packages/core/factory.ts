@@ -13,6 +13,7 @@ import {
 	shouldIgnoreCss,
 } from "../shared/css";
 import {invalidateJsModules, isJsFile, shouldSkipJsTransform, transformJs} from "../shared/js";
+import {isHtmlFile, transformHtml} from "../shared/html";
 
 export async function transformAtomicSource(code: string, id: string) {
 	await warmupClassMapFromCss();
@@ -38,6 +39,17 @@ function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
 			const {code, changed} = applyAtomicCss(source, file.fileName);
 			if (changed) {
 				file.source = code;
+			}
+		}
+	}
+
+	for (const file of Object.values(bundle)) {
+		if (file.type === "asset" && file.fileName.endsWith(".html")) {
+			const source =
+				typeof file.source === "string" ? file.source : file.source.toString();
+			const next = transformHtml(source);
+			if (next !== source) {
+				file.source = next;
 			}
 		}
 	}
@@ -106,6 +118,8 @@ const factory: UnpluginFactory<{
 	tailwindCss?: string;
 	transpilePackages?: string[];
 	ignoreCss?: Array<string | RegExp>;
+	preserveFunctions?: Iterable<string>;
+	classMapFile?: string | boolean;
 }> = (options = {}) => {
 	const targetFunctions = new Set(
 		options.targetFunctions || DEFAULT_TARGET_FUNCTIONS,
@@ -118,6 +132,14 @@ const factory: UnpluginFactory<{
 	}
 	if (options.ignoreCss?.length) {
 		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
+	}
+	if (options.preserveFunctions) {
+		ATOMIC_RUNTIME.preserveFunctions = new Set(options.preserveFunctions);
+	}
+	if (options.classMapFile === false) {
+		ATOMIC_RUNTIME.classMapFile = false;
+	} else if (typeof options.classMapFile === "string") {
+		ATOMIC_RUNTIME.classMapFile = options.classMapFile;
 	}
 
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.
@@ -152,6 +174,10 @@ const factory: UnpluginFactory<{
 				return !shouldIgnoreCss(cleanId) && !cleanId.includes("/.next/");
 			}
 
+			if (isHtmlFile(cleanId)) {
+				return true;
+			}
+
 			return isJsFile(cleanId) && !shouldSkipJsTransform(cleanId);
 		},
 
@@ -181,6 +207,12 @@ const factory: UnpluginFactory<{
 				return result;
 			}
 
+			if (isHtmlFile(id)) {
+				const next = transformHtml(code);
+				if (next === code) return null;
+				return {code: next, map: null};
+			}
+
 			return null;
 		},
 
@@ -192,6 +224,9 @@ const factory: UnpluginFactory<{
 			},
 			configureServer(server) {
 				ATOMIC_RUNTIME.viteServer = server;
+			},
+			transformIndexHtml(html) {
+				return transformHtml(html);
 			},
 		},
 
@@ -279,9 +314,11 @@ const factory: UnpluginFactory<{
 							// CSS first so the class map is complete (and rehydrated
 							// from already-atomic chunks) before any SSR/RSC JS rewrite.
 							const cssFiles: string[] = [];
+							const htmlFiles: string[] = [];
 							const jsFiles: string[] = [];
 							for (const fileName of Object.keys(assets)) {
 								if (fileName.endsWith(".css")) cssFiles.push(fileName);
+								else if (fileName.endsWith(".html")) htmlFiles.push(fileName);
 								else if (isJsAssetName(fileName)) jsFiles.push(fileName);
 							}
 
@@ -297,6 +334,16 @@ const factory: UnpluginFactory<{
 								);
 								if (changed) {
 									compilation.updateAsset(fileName, new RawSource(code));
+								}
+							}
+
+							for (const fileName of htmlFiles) {
+								const asset = assets[fileName];
+								if (!asset) continue;
+								const source = assetText(asset);
+								const next = transformHtml(source);
+								if (next !== source) {
+									compilation.updateAsset(fileName, new RawSource(next));
 								}
 							}
 

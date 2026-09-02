@@ -75,12 +75,13 @@ describe("transformJs", () => {
 		expect(transformJs("", new Set(["cn"]))).toEqual({code: null, map: null});
 	});
 
-	it("rewrites JSX className string literals", () => {
+	it("rewrites JSX class and className string literals", () => {
 		const result = transformJs(
-			`export const n = <div className="flex p-6" />;`,
+			`export const n = <div className="flex p-6" class="flex" />;`,
 			new Set(["cn"]),
 		);
 		expect(result.code).toContain("_aaaaaa _bbbbbb");
+		expect(result.code).toContain('class="_aaaaaa"');
 		expect(result.code).not.toContain("flex p-6");
 	});
 
@@ -125,12 +126,21 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_bbbbbb");
 	});
 
-	it("ignores JSX attributes that are not className", () => {
+	it("ignores JSX attributes that are not class or className", () => {
 		const result = transformJs(
-			`export const n = <div id="flex" class="p-6" />;`,
+			`export const n = <div id="flex" data-class="p-6" />;`,
 			new Set(["cn"]),
 		);
 		expect(result.code).toBeNull();
+	});
+
+	it("leaves strings inside preserveFunctions untouched", () => {
+		const result = transformJs(
+			`twIgnore("flex p-6"); cn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain('twIgnore("flex p-6")');
+		expect(result.code).toContain("_aaaaaa");
 	});
 
 	it("rewrites member callees whose property is a target helper", () => {

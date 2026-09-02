@@ -65,6 +65,52 @@ describe("withTailwindAtomic", () => {
 		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe(process.cwd());
 	});
 
+	it("accepts Next.js NextConfig when webpack is null", () => {
+		type NextJsWebpackConfig = (
+			config: Configuration,
+			context: {
+				dir: string;
+				dev: boolean;
+				isServer: boolean;
+				buildId: string;
+				config: object;
+				defaultLoaders: {babel: unknown};
+				totalPages: number;
+				webpack: unknown;
+			},
+		) => Configuration | null;
+
+		type NextJsNextConfig = {
+			reactCompiler?: boolean;
+			webpack?: NextJsWebpackConfig | null;
+			images?: {remotePatterns?: {hostname: string}[]};
+			headers?: () => Promise<
+				{source: string; headers: {key: string; value: string}[]}[]
+			>;
+		};
+
+		const nextConfig: NextJsNextConfig = {
+			reactCompiler: true,
+			webpack: null,
+			headers: async () => [],
+		};
+		const wrapped = withTailwindAtomic(nextConfig);
+		expect(wrapped.reactCompiler).toBe(true);
+		expect(typeof wrapped.webpack).toBe("function");
+
+		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
+		expect(wrapped.webpack(webpackConfig, {dev: false})).toBeDefined();
+	});
+
+	it("falls back to the webpack config when the user hook returns null", () => {
+		const webpack = vi.fn(() => null);
+		const config = withTailwindAtomic({webpack});
+		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
+		const result = config.webpack(webpackConfig, {dev: false});
+		expect(webpack).toHaveBeenCalledWith(webpackConfig, {dev: false});
+		expect(result?.plugins?.length).toBeGreaterThan(0);
+	});
+
 	it("allows transpilePackages from Next config through the webpack exclude", () => {
 		const config = withTailwindAtomic({
 			transpilePackages: ["ui-latamwin"],

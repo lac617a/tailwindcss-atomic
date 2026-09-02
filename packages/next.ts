@@ -15,6 +15,7 @@ const req = createRequire(import.meta.url);
 
 type NextWebpackOptions = {
 	dev: boolean;
+	[key: string]: unknown;
 };
 
 type TurboRuleOptions = {
@@ -30,18 +31,33 @@ type TurboRule =
 			default?: TurboRule | false;
 	  };
 
-type NextConfig = {
-	webpack?: (
-		config: Configuration,
-		options: NextWebpackOptions,
-	) => Configuration;
+/** Accepts Next.js `NextConfig` (`webpack` may be a hook, `null`, or omitted). */
+type NextConfigInput = {
+	webpack?: ((...args: never[]) => unknown) | null;
 	transpilePackages?: string[];
 	outputFileTracingRoot?: string;
 	turbopack?: {
 		root?: string;
-		rules?: Record<string, TurboRule | TurboRule[]>;
+		rules?: Record<string, unknown>;
 		[key: string]: unknown;
 	};
+};
+
+type AtomicNextConfig<T> = Omit<
+	T,
+	"webpack" | "turbopack" | "transpilePackages" | "outputFileTracingRoot"
+> & {
+	transpilePackages: string[];
+	outputFileTracingRoot?: string;
+	turbopack: {
+		root: string;
+		rules: Record<string, TurboRule | TurboRule[]>;
+		[key: string]: unknown;
+	};
+	webpack: (
+		config: Configuration,
+		options: NextWebpackOptions,
+	) => Configuration;
 };
 
 type AtomicNextOptions = Parameters<typeof webpackTailwindAtomic>[0] & {
@@ -84,7 +100,7 @@ function turboLoaderRules(atomicLoader: string): Record<string, TurboRule> {
 }
 
 function collectTranspilePackages(
-	nextConfig: NextConfig,
+	nextConfig: NextConfigInput,
 	options: AtomicNextOptions,
 ) {
 	const names = new Set<string>([
@@ -106,10 +122,26 @@ function collectTranspilePackages(
 	return [...names];
 }
 
-export function withTailwindAtomic(
-	nextConfig: NextConfig = {},
+type NextWebpackHook = (
+	config: Configuration,
+	options: NextWebpackOptions,
+) => Configuration | null | undefined;
+
+function callUserWebpack(
+	webpackHook: unknown,
+	config: Configuration,
+	webpackOptions: NextWebpackOptions,
+): Configuration {
+	if (typeof webpackHook !== "function") {
+		return config;
+	}
+	return (webpackHook as NextWebpackHook)(config, webpackOptions) ?? config;
+}
+
+export function withTailwindAtomic<T extends NextConfigInput = NextConfigInput>(
+	nextConfig: T = {} as T,
 	options: AtomicNextOptions = {},
-): NextConfig {
+): AtomicNextConfig<T> {
 	const atomicLoader = resolveAtomicLoader();
 	const transpilePackages = collectTranspilePackages(nextConfig, options);
 	for (const pkg of transpilePackages) {
@@ -173,11 +205,7 @@ export function withTailwindAtomic(
 				config.cache = {type: "memory"};
 			}
 
-			if (typeof nextConfig.webpack === "function") {
-				return nextConfig.webpack(config, webpackOptions);
-			}
-
-			return config;
+			return callUserWebpack(nextConfig.webpack, config, webpackOptions);
 		},
-	};
+	} as AtomicNextConfig<T>;
 }

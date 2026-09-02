@@ -3,6 +3,8 @@ import generateImport from "@babel/generator";
 import traverseImport from "@babel/traverse";
 import {lstatSync, realpathSync} from "node:fs";
 import path from "node:path";
+import type {Node} from "@babel/types";
+import type {NodePath} from "@babel/traverse";
 
 import {ATOMIC_RUNTIME} from "./constants";
 import {transformClassString} from "./css";
@@ -147,6 +149,71 @@ function invalidateJsModules() {
 	}
 }
 
+/**
+ * Rollup/TS often extracts `cva(["flex", "items-center"], …)` into
+ * `var classNameDefault = ["flex", "items-center"]; cva(classNameDefault, …)`.
+ * Follow the binding and rewrite mapped class strings in arrays/objects.
+ */
+function rewriteMappedClassNode(
+	node: Node | null | undefined,
+	classMap: Record<string, string>,
+): boolean {
+	if (!node) return false;
+
+	switch (node.type) {
+		case "StringLiteral": {
+			const next = transformClassString(node.value, classMap);
+			if (next === node.value) return false;
+			node.value = next;
+			return true;
+		}
+		case "ArrayExpression": {
+			let changed = false;
+			for (const el of node.elements) {
+				if (el && rewriteMappedClassNode(el, classMap)) changed = true;
+			}
+			return changed;
+		}
+		case "ObjectExpression": {
+			let changed = false;
+			for (const prop of node.properties) {
+				if (prop.type !== "ObjectProperty") continue;
+				let key: string | undefined;
+				if (!prop.computed && prop.key.type === "Identifier") {
+					key = prop.key.name;
+				} else if (prop.key.type === "StringLiteral") {
+					key = prop.key.value;
+				}
+				if (key === "defaultVariants") continue;
+				if (rewriteMappedClassNode(prop.value, classMap)) changed = true;
+			}
+			return changed;
+		}
+		case "TemplateLiteral":
+			return processArgument(node, classMap);
+		case "ConditionalExpression": {
+			const a = rewriteMappedClassNode(node.alternate, classMap);
+			const b = rewriteMappedClassNode(node.consequent, classMap);
+			return a || b;
+		}
+		case "LogicalExpression":
+			return rewriteMappedClassNode(node.right, classMap);
+		default:
+			return false;
+	}
+}
+
+function rewriteBoundClassName(
+	argPath: NodePath,
+	classMap: Record<string, string>,
+): boolean {
+	if (!argPath.isIdentifier()) return false;
+	const binding = argPath.scope.getBinding(argPath.node.name);
+	if (!binding?.path.isVariableDeclarator()) return false;
+	const init = binding.path.node.init;
+	return rewriteMappedClassNode(init, classMap);
+}
+
 function transformJs(code: string, targetFunctions: Set<string>) {
 	if (!code || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
 		return {code: null, map: null};
@@ -197,9 +264,32 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 					if (processCvaCall(path.node.arguments, classMap)) {
 						hasModifications = true;
 					}
+					for (const arg of path.get("arguments")) {
+						if (rewriteBoundClassName(arg, classMap)) {
+							hasModifications = true;
+						}
+						if (!arg.isObjectExpression()) continue;
+						for (const prop of arg.get("properties")) {
+							if (!prop.isObjectProperty()) continue;
+							const value = prop.get("value");
+							if (rewriteBoundClassName(value, classMap)) {
+								hasModifications = true;
+							}
+							if (!value.isObjectExpression()) continue;
+							for (const nested of value.get("properties")) {
+								if (!nested.isObjectProperty()) continue;
+								if (rewriteBoundClassName(nested.get("value"), classMap)) {
+									hasModifications = true;
+								}
+							}
+						}
+					}
 				} else if (funcName && targetFunctions.has(funcName)) {
-					path.node.arguments.forEach((arg) => {
-						if (processArgument(arg, classMap)) {
+					path.get("arguments").forEach((arg) => {
+						if (processArgument(arg.node, classMap)) {
+							hasModifications = true;
+						}
+						if (rewriteBoundClassName(arg, classMap)) {
 							hasModifications = true;
 						}
 					});
@@ -231,6 +321,18 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 							}
 						});
 					}
+				}
+			},
+
+			VariableDeclarator(path) {
+				if (rewriteMappedClassNode(path.node.init, classMap)) {
+					hasModifications = true;
+				}
+			},
+
+			ExportDefaultDeclaration(path) {
+				if (rewriteMappedClassNode(path.node.declaration, classMap)) {
+					hasModifications = true;
 				}
 			},
 		});

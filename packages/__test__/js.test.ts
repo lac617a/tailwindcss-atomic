@@ -148,6 +148,39 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_aaaaaa");
 	});
 
+	it("rewrites extracted cva base arrays used via an identifier", () => {
+		const result = transformJs(
+			`
+			var classNameDefault = ["flex", "p-6", "hidden"];
+			var chipsCva = cva(classNameDefault, {
+				variants: { size: { sm: ["flex"], md: "p-6" } },
+			});
+			export { chipsCva };
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).not.toMatch(/"flex"/);
+		expect(result.code).not.toMatch(/"p-6"/);
+		expect(result.code).not.toMatch(/"hidden"/);
+	});
+
+	it("rewrites exported variant objects that are not inlined into cva", () => {
+		const result = transformJs(
+			`
+			const classNameVariantColorScheme = { default: "flex p-6", primary: "hidden" };
+			export default classNameVariantColorScheme;
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).not.toMatch(/flex p-6/);
+	});
+
 	it("rewrites cva class values but leaves variant keys and names intact", () => {
 		ATOMIC_RUNTIME.classMap["shadow"] = "_660aea _40fc51 _6d43b5";
 		ATOMIC_RUNTIME.classMap["sm"] = "_smhash";

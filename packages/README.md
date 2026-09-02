@@ -162,6 +162,38 @@ export default withTailwindAtomic({
 
 Usa `pages/`, `styles/globals.css` con `@tailwind base/components/utilities` y el PostCSS de v3 de arriba. Ejemplo: `app/next12-app` (`pnpm dev:next12`, puerto 3018).
 
+## Vite (Tailwind 4)
+
+No hace falta `tailwind.config.js`. La entrada CSS usa `@import "tailwindcss"` (y opcionalmente `@theme`).
+
+```js
+// postcss.config.mjs
+export default {
+	plugins: {
+		"@tailwindcss/postcss": {},
+		"tailwindcss-atomic/postcss": {},
+	},
+};
+```
+
+```ts
+// vite.config.ts
+import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+	plugins: [react(), tailwindAtomic()],
+});
+```
+
+```css
+/* src/index.css */
+@import "tailwindcss";
+```
+
+Ejemplo: `app/vite-v4-app` (`pnpm dev:vite4`, puerto 3020).
+
 ## Vite (Tailwind 3)
 
 ```ts
@@ -174,7 +206,7 @@ export default defineConfig({
 });
 ```
 
-Ejemplo: `app/vite-app` (`pnpm dev:vite`, puerto 3017).
+Ejemplo: `app/vite-app` (`pnpm dev:vite`, puerto 3017). El PostCSS de v3 va **después** de `tailwindcss` y `autoprefixer`.
 
 ## Webpack
 

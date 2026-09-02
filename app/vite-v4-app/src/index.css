@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: ui-sans-serif, system-ui, sans-serif;
+	--color-brand: #38bdf8;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}

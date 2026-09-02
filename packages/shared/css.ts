@@ -4,6 +4,7 @@ import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import path from "node:path";
 import {pathToFileURL} from "node:url";
 import type {
+	AcceptedPlugin,
 	ChildNode,
 	Declaration as PostcssDeclaration,
 	Root as PostcssRoot,
@@ -30,10 +31,163 @@ const TAILWIND_SASS_LAYER_RE =
 
 const SASS_MODULE_RULE_RE = /@(?:use|forward)\s+[^;]*;/g;
 
-type NodeRequireLike = (id: string) => unknown;
+type NodeRequireLike = {
+	(id: string): unknown;
+	resolve?: (id: string) => string;
+};
+
+type TailwindV4Source = {
+	base: string;
+	pattern: string;
+	negated?: boolean;
+};
+
+type TailwindV4Compiler = {
+	root: "none" | null | TailwindV4Source;
+	sources?: TailwindV4Source[];
+	build: (candidates: string[]) => string;
+};
+
+type TailwindV4Scanner = {
+	scan: () => string[];
+};
 
 function hasTailwindDirectives(css: string) {
 	return TAILWIND_DIRECTIVE_RE.test(css);
+}
+
+function isViteCssJsWrapper(code: string) {
+	return (
+		code.includes("import.meta") ||
+		code.includes("updateStyle") ||
+		/^\s*(?:import|export)\b/.test(code)
+	);
+}
+
+function unwrapModule(mod: unknown): unknown {
+	if (mod && typeof mod === "object" && "default" in mod) {
+		const def = (mod as {default: unknown}).default;
+		if (def != null) return def;
+	}
+	return mod;
+}
+
+function asPostcssPlugin(mod: unknown): unknown | undefined {
+	if (mod == null) return undefined;
+	const plugin = unwrapModule(mod) ?? mod;
+	if (typeof plugin === "function") {
+		return (plugin as {postcss?: boolean}).postcss === true
+			? plugin
+			: undefined;
+	}
+	if (
+		typeof plugin === "object" &&
+		plugin !== null &&
+		"postcssPlugin" in plugin
+	) {
+		return plugin;
+	}
+	return undefined;
+}
+
+function tryRequire(appRequire: NodeRequireLike, id: string): unknown {
+	try {
+		return appRequire(id);
+	} catch {
+		return undefined;
+	}
+}
+
+function requireFromGraph(
+	appRequire: NodeRequireLike,
+	id: string,
+	via: string[],
+): unknown {
+	const direct = tryRequire(appRequire, id);
+	if (direct !== undefined) return direct;
+
+	for (const parent of via) {
+		try {
+			const parentId = appRequire.resolve?.(parent);
+			if (!parentId) continue;
+			return createRequire(parentId)(id);
+		} catch {
+			continue;
+		}
+	}
+	return undefined;
+}
+
+async function compileTailwindV4Css(
+	source: string,
+	cssPath: string,
+	pkgDir: string,
+	appRequire: NodeRequireLike,
+): Promise<string | undefined> {
+	const nodeMod = requireFromGraph(appRequire, "@tailwindcss/node", [
+		"@tailwindcss/vite",
+		"@tailwindcss/postcss",
+		"tailwindcss",
+	]) as
+		| {
+				compile?: (
+					css: string,
+					opts: {
+						base: string;
+						from?: string;
+						onDependency: (file: string) => void;
+					},
+				) => Promise<TailwindV4Compiler>;
+				default?: {
+					compile?: (
+						css: string,
+						opts: {
+							base: string;
+							from?: string;
+							onDependency: (file: string) => void;
+						},
+					) => Promise<TailwindV4Compiler>;
+				};
+		  }
+		| undefined;
+	const compile = nodeMod?.compile ?? nodeMod?.default?.compile;
+	if (typeof compile !== "function") return undefined;
+
+	try {
+		const compiler = await compile(source, {
+			base: path.dirname(cssPath),
+			from: cssPath,
+			onDependency() {},
+		});
+		if (!compiler || typeof compiler.build !== "function") return undefined;
+
+		let candidates: string[] = [];
+		const oxide = requireFromGraph(appRequire, "@tailwindcss/oxide", [
+			"@tailwindcss/node",
+			"@tailwindcss/vite",
+			"tailwindcss",
+		]) as
+			| {Scanner?: new (opts: {sources: TailwindV4Source[]}) => TailwindV4Scanner}
+			| undefined;
+		const Scanner = oxide?.Scanner;
+		if (typeof Scanner === "function") {
+			const sources: TailwindV4Source[] =
+				compiler.root === "none"
+					? []
+					: compiler.root === null
+						? [{base: pkgDir, pattern: "**/*", negated: false}]
+						: [{...compiler.root, negated: false}];
+			const scanner = new Scanner({
+				sources: sources.concat(compiler.sources ?? []),
+			});
+			candidates = scanner.scan();
+		}
+
+		const css = compiler.build(candidates);
+		return typeof css === "string" ? css : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 function isAlreadyAtomic(css: string) {
@@ -784,38 +938,77 @@ async function warmupCssFile(
 	const source = readFileSync(cssPath, "utf8");
 	const appRequire = createRequire(join(pkgDir, "package.json"));
 	const prepared = prepareWarmupSource(cssPath, source, appRequire);
-	const plugins = [];
+
 	try {
-		const loadConfig = appRequire("postcss-load-config");
+		const loadConfig = appRequire("postcss-load-config") as (
+			ctx?: unknown,
+			dir?: string,
+		) => Promise<{plugins?: unknown[]}>;
 		const loaded = await loadConfig({}, pkgDir);
 		if (Array.isArray(loaded?.plugins) && loaded.plugins.length) {
-			await postcss(loaded.plugins).process(prepared, {from: cssPath});
+			await postcss(loaded.plugins as AcceptedPlugin[]).process(prepared, {
+				from: cssPath,
+			});
 			if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
 			if (!hasTailwindDirectives(prepared)) return;
 		}
 	} catch {
 		// El app puede no tener postcss-load-config; armamos el pipeline a mano.
+		// También caemos aquí si el config trae `tailwindcss` v4 (ya no es plugin de PostCSS).
 	}
 
-	try {
-		const tw = appRequire("@tailwindcss/postcss");
-		plugins.push(tw.default || tw);
-	} catch {
-		try {
-			plugins.push(appRequire("tailwindcss"));
-		} catch {
-			return;
-		}
+	const twPostcss = asPostcssPlugin(
+		tryRequire(appRequire, "@tailwindcss/postcss"),
+	);
+	if (twPostcss) {
+		const plugins = [twPostcss];
+		const autoprefixer = asPostcssPlugin(
+			tryRequire(appRequire, "autoprefixer"),
+		);
+		if (autoprefixer) plugins.push(autoprefixer);
+		plugins.push(postcssTailwindAtomic());
+		await postcss(plugins as AcceptedPlugin[]).process(prepared, {
+			from: cssPath,
+		});
+		return;
 	}
 
-	try {
-		plugins.push(appRequire("autoprefixer"));
-	} catch {
-		// Tailwind v4 no lo necesita.
+	// Vite + `@tailwindcss/vite`: no hay plugin de PostCSS. Compilamos con
+	// `@tailwindcss/node` (dependencia transitiva) y atomicizamos el CSS expandido.
+	const compiled = await compileTailwindV4Css(
+		prepared,
+		cssPath,
+		pkgDir,
+		appRequire,
+	);
+	if (compiled) {
+		applyAtomicCss(compiled, cssPath);
+		return;
 	}
 
+	const twV3 = asPostcssPlugin(tryRequire(appRequire, "tailwindcss"));
+	if (!twV3) return;
+
+	const plugins = [twV3];
+	const autoprefixer = asPostcssPlugin(tryRequire(appRequire, "autoprefixer"));
+	if (autoprefixer) plugins.push(autoprefixer);
 	plugins.push(postcssTailwindAtomic());
-	await postcss(plugins).process(prepared, {from: cssPath});
+	await postcss(plugins as AcceptedPlugin[]).process(prepared, {from: cssPath});
+}
+
+async function compileCssEntryForAtomic(cssPath: string, source: string) {
+	const {existsSync} = await import("node:fs");
+	const {join, dirname, parse} = await import("node:path");
+	const pkgDir = findNearestPackageDir(
+		dirname(cssPath),
+		existsSync,
+		join,
+		dirname,
+		parse,
+	);
+	const appRequire = createRequire(join(pkgDir, "package.json"));
+	const prepared = prepareWarmupSource(cssPath, source, appRequire);
+	return compileTailwindV4Css(prepared, cssPath, pkgDir, appRequire);
 }
 
 async function runWarmup() {
@@ -870,6 +1063,10 @@ async function warmupClassMapFromCss() {
 
 export {
 	isCssFile,
+	isViteCssJsWrapper,
+	asPostcssPlugin,
+	compileTailwindV4Css,
+	compileCssEntryForAtomic,
 	mergeClassMap,
 	applyAtomicCss,
 	atomicizeContainer,

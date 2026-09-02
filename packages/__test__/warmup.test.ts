@@ -33,6 +33,37 @@ plugin.postcss = true;
 module.exports = plugin;
 `;
 
+const v4Trap = `"use strict";
+function plugin() {
+	throw new Error("It looks like you're trying to use \`tailwindcss\` directly as a PostCSS plugin. The PostCSS plugin has moved to a separate package, so to continue using Tailwind CSS with PostCSS you'll need to install \`@tailwindcss/postcss\` and update your PostCSS configuration.");
+}
+module.exports = plugin;
+`;
+
+const v4Compiler = `"use strict";
+exports.compile = async function compile() {
+	return {
+		root: null,
+		sources: [],
+		build(candidates) {
+			if (!Array.isArray(candidates) || !candidates.includes("flex")) {
+				return "/* empty */";
+			}
+			return ".flex { display: flex }\\n.p-6 { padding: 1.5rem }";
+		},
+	};
+};
+`;
+
+const oxideScanner = `"use strict";
+class Scanner {
+	scan() {
+		return ["flex", "p-6"];
+	}
+}
+exports.Scanner = Scanner;
+`;
+
 const expandingTailwindPlugin = `"use strict";
 function plugin() {
 	return {
@@ -71,6 +102,19 @@ function writeModule(root: string, id: string, source: string) {
 		JSON.stringify({name: id, main: "index.js"}),
 	);
 	fs.writeFileSync(path.join(dir, "index.js"), source);
+}
+
+function writeNestedModule(
+	root: string,
+	parent: string,
+	id: string,
+	source: string,
+) {
+	writeModule(
+		path.join(root, "node_modules", ...parent.split("/")),
+		id,
+		source,
+	);
 }
 
 function makeApp(
@@ -193,6 +237,61 @@ module.exports = async () => ({plugins: []});
 
 	it("falls back to tailwindcss when the v4 plugin is missing", async () => {
 		const root = makeApp({modules: {tailwindcss: noopPlugin}});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("does not use Tailwind CSS v4 as a PostCSS plugin", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const root = makeApp({modules: {tailwindcss: v4Trap}});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("warms the class map via @tailwindcss/node when PostCSS Tailwind is missing", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "src/index.css",
+				source: '@import "tailwindcss";',
+			},
+			modules: {
+				tailwindcss: v4Trap,
+				"@tailwindcss/node": v4Compiler,
+				"@tailwindcss/oxide": oxideScanner,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-6"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("resolves @tailwindcss/node from @tailwindcss/vite in pnpm layouts", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "src/index.css",
+				source: '@import "tailwindcss";',
+			},
+			modules: {
+				tailwindcss: v4Trap,
+				"@tailwindcss/vite": `"use strict";\nmodule.exports = {};\n`,
+			},
+		});
+		writeNestedModule(root, "@tailwindcss/vite", "@tailwindcss/node", v4Compiler);
+		writeNestedModule(
+			root,
+			"@tailwindcss/vite",
+			"@tailwindcss/oxide",
+			oxideScanner,
+		);
 		pointAt(root);
 		const warmup = await getWarmup();
 		await warmup();

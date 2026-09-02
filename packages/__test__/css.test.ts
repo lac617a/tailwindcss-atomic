@@ -9,7 +9,9 @@ import {
 	findCssEntries,
 	findCssEntry,
 	findNearestPackageDir,
+	asPostcssPlugin,
 	isCssFile,
+	isViteCssJsWrapper,
 	mergeClassMap,
 	shouldIgnoreCss,
 	normalizeTailwindSassDirectives,
@@ -36,6 +38,34 @@ describe("isCssFile", () => {
 		expect(isCssFile("app.tsx")).toBe(false);
 		expect(isCssFile("")).toBe(false);
 		expect(isCssFile("?")).toBe(false);
+	});
+});
+
+describe("asPostcssPlugin", () => {
+	it("accepts PostCSS plugin functions and objects", () => {
+		const fn = Object.assign(() => ({}), {postcss: true});
+		expect(asPostcssPlugin(fn)).toBe(fn);
+		expect(asPostcssPlugin({default: fn})).toBe(fn);
+		const obj = {postcssPlugin: "x"};
+		expect(asPostcssPlugin(obj)).toBe(obj);
+	});
+
+	it("rejects Tailwind CSS v4 default export", () => {
+		function trap() {
+			throw new Error("It looks like you're trying to use tailwindcss directly");
+		}
+		expect(asPostcssPlugin(trap)).toBeUndefined();
+		expect(asPostcssPlugin({default: trap})).toBeUndefined();
+		expect(asPostcssPlugin(undefined)).toBeUndefined();
+	});
+});
+
+describe("isViteCssJsWrapper", () => {
+	it("detects Vite HMR-injected CSS modules", () => {
+		expect(isViteCssJsWrapper("import.meta.hot.accept()")).toBe(true);
+		expect(isViteCssJsWrapper("updateStyle(id, css)")).toBe(true);
+		expect(isViteCssJsWrapper('export default "body{}"')).toBe(true);
+		expect(isViteCssJsWrapper(".flex { display: flex }")).toBe(false);
 	});
 });
 

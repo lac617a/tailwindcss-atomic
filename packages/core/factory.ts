@@ -10,6 +10,7 @@ import {process_tailwind_css} from "./wasm";
 import {resolveWebpackLoaderPath} from "../shared/utils";
 import {
 	isCssFile,
+	isViteCssJsWrapper,
 	mergeClassMap,
 	applyAtomicCss,
 	warmupClassMapFromCss,
@@ -194,11 +195,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 				if (shouldIgnoreCss(id)) return null;
 				// Vite already wrapped the file in the HMR injector (`updateStyle`).
 				// Parsing that JS as CSS wipes the stylesheet → página en blanco y negro.
-				if (
-					code.includes("import.meta") ||
-					code.includes("updateStyle") ||
-					/^\s*(?:import|export)\b/.test(code)
-				) {
+				if (isViteCssJsWrapper(code)) {
 					return null;
 				}
 

@@ -166,6 +166,22 @@ Usa `pages/`, `styles/globals.css` con `@tailwind base/components/utilities` y e
 
 No hace falta `tailwind.config.js`. La entrada CSS usa `@import "tailwindcss"` (y opcionalmente `@theme`).
 
+La forma recomendada con Vite es `@tailwindcss/vite` (la de shadcn). **No** hace falta `@tailwindcss/postcss` ni `postcss.config`:
+
+```ts
+// vite.config.ts
+import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+	plugins: [react(), tailwindcss(), tailwindAtomic()],
+});
+```
+
+Si prefieres PostCSS en vez del plugin de Vite:
+
 ```js
 // postcss.config.mjs
 export default {

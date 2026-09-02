@@ -5,6 +5,8 @@ import vite from "../vite";
 import webpack from "../webpack";
 import rollup from "../rollup";
 import esbuild from "../esbuild";
+import {transformViteCss} from "../shared/vite-css";
+import {ATOMIC_RUNTIME} from "../shared/constants";
 
 describe("plugin adapters", () => {
 	it("creates an unplugin instance from the factory", () => {
@@ -21,5 +23,33 @@ describe("plugin adapters", () => {
 		expect(typeof webpack).toBe("function");
 		expect(typeof rollup).toBe("function");
 		expect(typeof esbuild).toBe("function");
+	});
+
+	it("returns a CSS pre-plugin plus the unplugin Vite adapter", () => {
+		const plugins = vite();
+		expect(Array.isArray(plugins)).toBe(true);
+		expect(plugins[0]?.name).toBe("tailwind-atomic-css");
+		expect(plugins[0]?.enforce).toBe("pre");
+		expect(typeof plugins[1]).toBe("object");
+	});
+});
+
+describe("transformViteCss", () => {
+	it("atomicizes compiled CSS and skips Vite JS wrappers", async () => {
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+		const result = await transformViteCss(
+			".flex { display: flex }",
+			"src/index.css",
+		);
+		expect(result?.code).toContain("/*! tailwind-atomic */");
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+
+		expect(
+			await transformViteCss("import.meta.hot.accept()", "src/index.css"),
+		).toBeNull();
+		expect(await transformViteCss("", "src/index.css")).toBeNull();
+		expect(
+			await transformViteCss(".flex { display: flex }", "Button.module.css"),
+		).toBeNull();
 	});
 });

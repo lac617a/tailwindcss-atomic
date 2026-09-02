@@ -18,6 +18,7 @@ import {
 	TAILWIND_DIRECTIVE_RE,
 } from "./constants";
 
+import {findMonorepoRoot} from "./workspace";
 import {process_tailwind_css} from "../core/wasm";
 import postcssTailwindAtomic from "../postcss";
 
@@ -618,15 +619,18 @@ function collectSearchRoots(
 	dirname: (path: string) => string,
 	parse: (path: string) => {root: string},
 ) {
+	const projectRoot = process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
 	const starts = [
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"],
+		projectRoot,
 		...ATOMIC_RUNTIME.projectRoots,
-		process.cwd(),
 		process.env["INIT_CWD"],
+		projectRoot ? undefined : process.cwd(),
 	].filter((dir): dir is string => Boolean(dir));
 
 	const bases: string[] = [];
 	const seen = new Set<string>();
+	const ceiling = findMonorepoRoot(resolve(starts[0] ?? process.cwd()));
+	const ceilingKey = ceiling.replace(/\\/g, "/").toLowerCase();
 
 	for (const start of starts) {
 		let dir = resolve(start);
@@ -637,15 +641,17 @@ function collectSearchRoots(
 				seen.add(key);
 				bases.push(dir);
 			}
-			if (dir === root) break;
-			dir = dirname(dir);
+			if (dir === root || key === ceilingKey) break;
+			const parent = dirname(dir);
+			if (parent === dir) break;
+			dir = parent;
 		}
 	}
 
 	return bases;
 }
 
-function findCssEntry(
+function findCssEntries(
 	existsSync: (path: string) => boolean,
 	readdirSync: (path: string) => string[],
 	statSync: (path: string) => {isDirectory(): boolean},
@@ -655,11 +661,28 @@ function findCssEntry(
 	parse: (path: string) => {root: string},
 ) {
 	const bases = collectSearchRoots(resolve, dirname, parse);
+	const found: string[] = [];
+	const seen = new Set<string>();
+
+	function add(abs: string) {
+		const key = abs.replace(/\\/g, "/").toLowerCase();
+		if (seen.has(key) || !existsSync(abs)) return;
+		seen.add(key);
+		found.push(abs);
+	}
+
+	for (const rel of ATOMIC_RUNTIME.cssEntries) {
+		if (!rel) continue;
+		if (/^(?:[a-zA-Z]:)?[\\/]/.test(rel)) {
+			add(rel);
+			continue;
+		}
+		for (const base of bases) add(resolve(base, rel));
+	}
 
 	for (const base of bases) {
 		for (const rel of CSS_ENTRY_CANDIDATES) {
-			const abs = resolve(base, rel);
-			if (existsSync(abs)) return abs;
+			add(resolve(base, rel));
 		}
 	}
 
@@ -673,8 +696,12 @@ function findCssEntry(
 		".turbo",
 	]);
 
-	function walk(dir: string, depth: number): string | undefined {
-		if (depth > 3) return;
+	function walk(dir: string, depth: number) {
+		if (depth > 6) return;
+		for (const rel of CSS_ENTRY_CANDIDATES) {
+			add(resolve(dir, rel));
+		}
+		if (found.length >= 12) return;
 		let names: string[];
 		try {
 			names = readdirSync(dir);
@@ -690,21 +717,37 @@ function findCssEntry(
 			} catch {
 				continue;
 			}
-
-			for (const rel of CSS_ENTRY_CANDIDATES) {
-				const abs = resolve(full, rel);
-				if (existsSync(abs)) return abs;
-			}
-
-			const nested = walk(full, depth + 1);
-			if (nested) return nested;
+			walk(full, depth + 1);
+			if (found.length >= 12) return;
 		}
 	}
 
 	for (const base of bases) {
-		const found = walk(base, 0);
-		if (found) return found;
+		walk(base, 0);
+		if (found.length >= 12) break;
 	}
+
+	return found;
+}
+
+function findCssEntry(
+	existsSync: (path: string) => boolean,
+	readdirSync: (path: string) => string[],
+	statSync: (path: string) => {isDirectory(): boolean},
+	resolve: (...paths: string[]) => string,
+	join: (...paths: string[]) => string,
+	dirname: (path: string) => string,
+	parse: (path: string) => {root: string},
+) {
+	return findCssEntries(
+		existsSync,
+		readdirSync,
+		statSync,
+		resolve,
+		join,
+		dirname,
+		parse,
+	)[0];
 }
 
 function findNearestPackageDir(
@@ -723,23 +766,13 @@ function findNearestPackageDir(
 	}
 }
 
-async function runWarmup() {
-	const {existsSync, readFileSync, readdirSync, statSync} = await import(
-		"node:fs"
-	);
-	const {resolve, join, dirname, parse} = await import("node:path");
-
-	const cssPath = findCssEntry(
-		existsSync,
-		readdirSync,
-		statSync,
-		resolve,
-		join,
-		dirname,
-		parse,
-	);
-	if (!cssPath) return;
-
+async function warmupCssFile(
+	cssPath: string,
+	existsSync: (path: string) => boolean,
+	join: (...paths: string[]) => string,
+	dirname: (path: string) => string,
+	parse: (path: string) => {root: string},
+) {
 	const pkgDir = findNearestPackageDir(
 		dirname(cssPath),
 		existsSync,
@@ -747,6 +780,7 @@ async function runWarmup() {
 		dirname,
 		parse,
 	);
+	const {readFileSync} = await import("node:fs");
 	const source = readFileSync(cssPath, "utf8");
 	const appRequire = createRequire(join(pkgDir, "package.json"));
 	const prepared = prepareWarmupSource(cssPath, source, appRequire);
@@ -757,8 +791,6 @@ async function runWarmup() {
 		if (Array.isArray(loaded?.plugins) && loaded.plugins.length) {
 			await postcss(loaded.plugins).process(prepared, {from: cssPath});
 			if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
-			// Config ran but Tailwind no expandió (p.ej. @use sin normalizar).
-			// Si ya no quedan directivas, no rehacemos el pipeline.
 			if (!hasTailwindDirectives(prepared)) return;
 		}
 	} catch {
@@ -786,10 +818,41 @@ async function runWarmup() {
 	await postcss(plugins).process(prepared, {from: cssPath});
 }
 
+async function runWarmup() {
+	const {existsSync, readdirSync, statSync} = await import("node:fs");
+	const {resolve, join, dirname, parse} = await import("node:path");
+
+	const cssPaths = findCssEntries(
+		existsSync,
+		readdirSync,
+		statSync,
+		resolve,
+		join,
+		dirname,
+		parse,
+	);
+	if (!cssPaths.length) return;
+
+	let failures = 0;
+	let lastError: unknown;
+	for (const cssPath of cssPaths) {
+		try {
+			await warmupCssFile(cssPath, existsSync, join, dirname, parse);
+		} catch (error) {
+			failures += 1;
+			lastError = error;
+		}
+	}
+	if (failures === cssPaths.length && lastError) {
+		throw lastError;
+	}
+}
+
 async function warmupClassMapFromCss() {
 	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
 	loadPersistedClassMap();
-	if (Object.keys(ATOMIC_RUNTIME.classMap).length > 0) return;
+	// A persisted map can be incomplete (first CSS file only). Always warm
+	// remaining entries so monorepo skins and later utilities are included.
 	if (warmupPromise) return warmupPromise;
 
 	warmupPromise = runWarmup()
@@ -817,6 +880,7 @@ export {
 	warmupClassMapFromCss,
 	collectSearchRoots,
 	findCssEntry,
+	findCssEntries,
 	findNearestPackageDir,
 	normalizeTailwindSassDirectives,
 	stripSassModuleRules,

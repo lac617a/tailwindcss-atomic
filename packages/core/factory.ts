@@ -16,17 +16,15 @@ import {invalidateJsModules, isJsFile, shouldSkipJsTransform, transformJs} from 
 import {isHtmlFile, transformHtml} from "../shared/html";
 
 export async function transformAtomicSource(code: string, id: string) {
-	await warmupClassMapFromCss();
 	if (!code || !id) return {code: null, map: null};
 
 	const cleanId = String(id).split("?")[0]?.replace(/\\/g, "/");
 
-	if (!cleanId || shouldSkipJsTransform(cleanId)) {
+	if (!cleanId || shouldSkipJsTransform(cleanId) || !isJsFile(cleanId)) {
 		return {code: null, map: null};
 	}
 
-	if (!isJsFile(cleanId)) return {code: null, map: null};
-
+	await warmupClassMapFromCss();
 	return transformJs(code, ATOMIC_RUNTIME.targetFunctions);
 }
 
@@ -120,6 +118,7 @@ const factory: UnpluginFactory<{
 	ignoreCss?: Array<string | RegExp>;
 	preserveFunctions?: Iterable<string>;
 	classMapFile?: string | boolean;
+	cssEntries?: string[];
 }> = (options = {}) => {
 	const targetFunctions = new Set(
 		options.targetFunctions || DEFAULT_TARGET_FUNCTIONS,
@@ -140,6 +139,9 @@ const factory: UnpluginFactory<{
 		ATOMIC_RUNTIME.classMapFile = false;
 	} else if (typeof options.classMapFile === "string") {
 		ATOMIC_RUNTIME.classMapFile = options.classMapFile;
+	}
+	if (options.cssEntries?.length) {
+		ATOMIC_RUNTIME.cssEntries.push(...options.cssEntries);
 	}
 
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.

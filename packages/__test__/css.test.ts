@@ -6,6 +6,7 @@ import {
 	atomicizeContainer,
 	isUtilityRule,
 	collectSearchRoots,
+	findCssEntries,
 	findCssEntry,
 	findNearestPackageDir,
 	isCssFile,
@@ -550,7 +551,6 @@ describe("CSS entry discovery", () => {
 		const bases = collectSearchRoots(posix.resolve, posix.dirname, posix.parse);
 		expect(bases[0]).toBe("/app");
 		expect(new Set(bases).size).toBe(bases.length);
-		expect(bases).toContain("/");
 
 		cwd.mockRestore();
 	});
@@ -573,7 +573,7 @@ describe("CSS entry discovery", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("walks nested folders, skips build dirs and stops at depth 4", () => {
+	it("walks nested folders and skips build dirs", () => {
 		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/repo";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/repo");
@@ -604,7 +604,7 @@ describe("CSS entry discovery", () => {
 		vi.restoreAllMocks();
 	});
 
-	it("stops walking after four directory levels", () => {
+	it("stops walking after six directory levels", () => {
 		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/repo";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/repo");
@@ -615,12 +615,14 @@ describe("CSS entry discovery", () => {
 			"/repo/a/b": ["c"],
 			"/repo/a/b/c": ["d"],
 			"/repo/a/b/c/d": ["e"],
-			"/repo/a/b/c/d/e": ["src"],
+			"/repo/a/b/c/d/e": ["f"],
+			"/repo/a/b/c/d/e/f": ["g"],
+			"/repo/a/b/c/d/e/f/g": ["src"],
 		};
 
 		expect(
 			findCssEntry(
-				(p) => p === "/repo/a/b/c/d/e/src/index.css",
+				(p) => p === "/repo/a/b/c/d/e/f/g/src/index.css",
 				(dir) => dirs[dir] ?? [],
 				() => ({isDirectory: () => true}),
 				posix.resolve,
@@ -629,6 +631,27 @@ describe("CSS entry discovery", () => {
 				posix.parse,
 			),
 		).toBeUndefined();
+		vi.restoreAllMocks();
+	});
+
+	it("prefers explicit cssEntries over candidate discovery", () => {
+		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/app";
+		ATOMIC_RUNTIME.projectRoots = [];
+		ATOMIC_RUNTIME.cssEntries = ["scss/styles.scss"];
+		vi.spyOn(process, "cwd").mockReturnValue("/app");
+
+		const found = findCssEntries(
+			(p) =>
+				p === "/app/scss/styles.scss" || p === "/app/src/index.css",
+			() => [],
+			() => ({isDirectory: () => false}),
+			posix.resolve,
+			posix.join,
+			posix.dirname,
+			posix.parse,
+		);
+		expect(found[0]).toBe("/app/scss/styles.scss");
+		expect(found).toContain("/app/src/index.css");
 		vi.restoreAllMocks();
 	});
 

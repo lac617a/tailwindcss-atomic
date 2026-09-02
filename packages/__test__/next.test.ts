@@ -3,20 +3,28 @@ import type {Configuration} from "webpack";
 import {withTailwindAtomic} from "../next";
 import {ATOMIC_RUNTIME} from "../shared/constants";
 
+const loaderRule = {
+	loaders: [expect.stringMatching(/loader\.cjs$/)],
+	as: "*",
+};
+
 describe("withTailwindAtomic", () => {
-	it("injects turbopack loader rules for app source files", () => {
+	it("injects turbopack loader rules for app and workspace files", () => {
 		const config = withTailwindAtomic();
 		const rules = config.turbopack?.rules ?? {};
 		expect(rules["*.tsx"]).toEqual({
-			foreign: false,
-			default: {
-				loaders: [expect.stringMatching(/loader\.cjs$/)],
-				as: "*",
-			},
+			foreign: loaderRule,
+			default: loaderRule,
 		});
 		expect(rules["*.ts"]).toBeDefined();
 		expect(rules["*.jsx"]).toBeDefined();
-		expect(rules["*.js"]).toBeUndefined();
+		expect(rules["*.js"]).toEqual({
+			foreign: loaderRule,
+			default: loaderRule,
+		});
+		expect(rules["*.mjs"]).toBeDefined();
+		expect(config.turbopack?.root).toBeTruthy();
+		expect(config.outputFileTracingRoot).toBe(config.turbopack?.root);
 	});
 
 	it("keeps user turbopack rules and calls the original webpack hook", () => {
@@ -70,6 +78,16 @@ describe("withTailwindAtomic", () => {
 			loaderRule.exclude?.("node_modules/ui-latamwin/dist/Button.js"),
 		).toBe(false);
 		expect(ATOMIC_RUNTIME.transpilePackages.has("ui-latamwin")).toBe(true);
+	});
+
+	it("records cssEntries and keeps an explicit turbopack root", () => {
+		const config = withTailwindAtomic(
+			{turbopack: {root: "/tmp/app"}},
+			{cssEntries: ["scss/styles.scss"]},
+		);
+		expect(ATOMIC_RUNTIME.cssEntries).toContain("scss/styles.scss");
+		expect(config.turbopack?.root).toBe("/tmp/app");
+		expect(config.outputFileTracingRoot).toBe("/tmp/app");
 	});
 
 	it("falls back to dist/loader.cjs when the source shim is missing", async () => {

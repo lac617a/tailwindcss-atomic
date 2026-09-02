@@ -45,6 +45,7 @@ type AtomicRuntime = {
 	ignoreCss: IgnoreCssPattern[];
 	preserveFunctions: Set<string>;
 	classMapFile: string | false | undefined;
+	cssEntries: string[];
 };
 
 function getAtomicRuntime(): AtomicRuntime {
@@ -62,6 +63,7 @@ function getAtomicRuntime(): AtomicRuntime {
 			ignoreCss: [],
 			preserveFunctions: new Set(DEFAULT_PRESERVE_FUNCTIONS),
 			classMapFile: undefined,
+			cssEntries: [],
 		};
 	}
 	const runtime = globalRef[ATOMIC_RUNTIME_KEY];
@@ -76,6 +78,9 @@ function getAtomicRuntime(): AtomicRuntime {
 	}
 	if (!runtime.preserveFunctions) {
 		runtime.preserveFunctions = new Set(DEFAULT_PRESERVE_FUNCTIONS);
+	}
+	if (!runtime.cssEntries) {
+		runtime.cssEntries = [];
 	}
 	return runtime;
 }

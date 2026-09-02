@@ -118,6 +118,37 @@ export default withTailwindAtomic({
 
 `withTailwindAtomic` rellena `turbopack.rules` con el loader de TS/JS (además del hook de Webpack). El PostCSS de Tailwind 4 sigue siendo obligatorio. Ejemplo: `app/next-turbo-app` (`pnpm dev:turbo`).
 
+## Turborepo / monorepo (Next + Turbopack)
+
+Un className mixto (`flex … hover:bg-revamp-… _cafc46 _ffc2a9`) significa que **el CSS sí se atomicizó** pero **parte del JS no se reescribió**. En Webpack el plugin recorre todos los chunks en `processAssets`. Turbopack no tiene ese paso: solo reescribe los módulos que pasan por el loader.
+
+Eso pasa cuando el `cva()` / `cn()` vive en un design system fuera de la app (`packages/ui`, `node_modules/ui-latamwin`) y las reglas de Turbopack solo tocaban el código de `apps/webs/latamwin`.
+
+`withTailwindAtomic` ahora:
+
+1. Pone el loader en **`foreign` y `default`** para `*.ts(x)`, `*.js(x)`, `*.mjs` y `*.cjs` (el loader no-op en `react` / `next`; sí reescribe `transpilePackages` y junctions del workspace).
+2. Fija `turbopack.root` y `outputFileTracingRoot` en la raíz del monorepo (`turbo.json` / `pnpm-workspace.yaml`) si no los definiste.
+3. Añade a `transpilePackages` los paquetes del workspace que la app declara en `dependencies` (por ejemplo `ui-latamwin`).
+4. Hace warmup de **todas** las entradas CSS que encuentre (no solo la primera). Puedes forzar la de la web:
+
+```ts
+// apps/webs/latamwin/next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+const nextConfig = {
+	reactStrictMode: true,
+	transpilePackages: ["ui-latamwin"], // opcional: se detecta si está en package.json
+};
+
+export default withTailwindAtomic(nextConfig, {
+	cssEntries: ["scss/styles.scss"],
+});
+```
+
+El `tailwind.config.js` compartido (`packages/config/tailwind-config`) no hay que duplicarlo: Tailwind ya lo resuelve vía PostCSS de la app. Lo que sí debe pasar por el loader es el **JS que emite classNames** (botones `cva`, `cn` del design system).
+
+Si un paquete UI se publica como `dist/*.js` y no está en `transpilePackages`, sus strings `flex` / `bg-revamp-*` llegan intactos al DOM y se mezclan con los hashes de la app. Añádelo a `transpilePackages` o importa el source (`exports` → `src`).
+
 ## Next.js 12 (Pages Router, Tailwind 3)
 
 ```js
@@ -195,6 +226,8 @@ type Options = {
 	preserveFunctions?: Iterable<string>;
 	/** Inventario JSON del mapa (como `.tw-patch` en tailwindcss-mangle). `false` lo desactiva. */
 	classMapFile?: string | boolean;
+	/** Entradas CSS/SCSS extra para el warmup (monorepos: `scss/styles.scss`). */
+	cssEntries?: string[];
 };
 ```
 

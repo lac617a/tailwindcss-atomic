@@ -86,6 +86,11 @@ describe("factory plugin", () => {
 		expect(ATOMIC_RUNTIME.targetFunctions).toEqual(new Set(["tw"]));
 	});
 
+	it("records cssEntries for warmup", () => {
+		createPlugin({cssEntries: ["scss/styles.scss"]});
+		expect(ATOMIC_RUNTIME.cssEntries).toContain("scss/styles.scss");
+	});
+
 	it("filters transform ids", () => {
 		const plugin = createPlugin();
 		expect(plugin.transformInclude("")).toBe(false);

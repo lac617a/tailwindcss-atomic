@@ -59,6 +59,7 @@ describe("constants", () => {
 		expect(CSS_ENTRY_CANDIDATES).toContain("app/globals.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("src/index.css");
 		expect(CSS_ENTRY_CANDIDATES).toContain("scss/styles.scss");
+		expect(Array.isArray(ATOMIC_RUNTIME.cssEntries)).toBe(true);
 	});
 
 	it("reuses the runtime already stored on globalThis", async () => {

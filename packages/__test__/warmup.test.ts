@@ -228,6 +228,22 @@ module.exports = async () => ({plugins: []});
 		await expect(warmup()).resolves.toBeUndefined();
 	});
 
+	it("warms from an explicit cssEntries path that is not a default candidate", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "design/tokens.css",
+				source: ".flex { display: flex }",
+			},
+			modules: {tailwindcss: noopPlugin},
+		});
+		pointAt(root);
+		ATOMIC_RUNTIME.cssEntries = ["design/tokens.css"];
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
 	it("warms the class map from SCSS @use tailwindcss layers (Next 15 + Tailwind 3)", async () => {
 		const root = makeApp({
 			skipDefaultCss: true,

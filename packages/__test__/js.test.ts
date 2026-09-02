@@ -142,7 +142,7 @@ describe("transformJs", () => {
 			new Set(["cn"]),
 		);
 		expect(result.code).toContain("_twAtomicReconcile");
-		expect(result.code).toContain("virtual:tailwind-atomic/runtime");
+		expect(result.code).toContain("tailwindcss-atomic/runtime");
 		expect(result.code).toContain("_twAtomicReconcile(cn(");
 		expect(result.code).toContain("_r12001");
 		expect(result.code).toContain("_cccccc");

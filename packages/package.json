@@ -1,6 +1,6 @@
 {
 	"name": "tailwindcss-atomic",
-	"version": "1.0.17",
+	"version": "1.0.18",
 	"license": "MIT",
 	"type": "module",
 	"author": "lac617a <dominyel.r@gmail.com>",
@@ -107,6 +107,16 @@
 			"types": "./dist/postcss.d.mts",
 			"import": "./dist/postcss.mjs",
 			"require": "./postcss.cjs"
+		},
+		"./runtime": {
+			"import": {
+				"types": "./dist/atomic-runtime.d.mts",
+				"default": "./dist/atomic-runtime.mjs"
+			},
+			"require": {
+				"types": "./dist/atomic-runtime.d.cts",
+				"default": "./dist/atomic-runtime.cjs"
+			}
 		},
 		"./*": "./*"
 	},

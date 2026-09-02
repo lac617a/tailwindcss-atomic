@@ -40,7 +40,7 @@ describe("plugin adapters", () => {
 			resolveId?: (id: string) => string | undefined;
 			load?: (id: string) => string | undefined;
 		};
-		expect(plugin.resolveId?.("virtual:tailwind-atomic/runtime")).toBe(
+		expect(plugin.resolveId?.("tailwindcss-atomic/runtime")).toBe(
 			"\0tailwind-atomic-runtime",
 		);
 		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";

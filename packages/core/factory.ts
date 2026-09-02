@@ -30,13 +30,20 @@ import {
 } from "../shared/html";
 import {
 	generateRuntimeModule,
+	isAtomicRuntimeModule,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
 } from "../shared/virtual-runtime";
-import {UnpluginFactory} from "unplugin";
 
 export async function transformAtomicSource(code: string, id: string) {
-	if (!code || !id) return {code: null, map: null};
+	if (!id) return {code: null, map: null};
+
+	if (isAtomicRuntimeModule(id)) {
+		await warmupClassMapFromCss();
+		return {code: generateRuntimeModule(), map: null};
+	}
+
+	if (!code) return {code: null, map: null};
 
 	const cleanId = String(id).split("?")[0]?.replace(/\\/g, "/");
 
@@ -243,10 +250,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 					if (shouldIgnoreCss(id) || isViteCssJsWrapper(code)) {
 						return null;
 					}
-					const {code: next, changed} = processCssAndMaybeInvalidate(
-						code,
-						id,
-					);
+					const {code: next, changed} = processCssAndMaybeInvalidate(code, id);
 					if (!changed) return null;
 					return {code: next, map: null};
 				}

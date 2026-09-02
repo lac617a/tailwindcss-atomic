@@ -51,6 +51,16 @@ describe("transformAtomicSource", () => {
 		});
 	});
 
+	it("emits the generated runtime for atomic-runtime modules", async () => {
+		const result = await transformAtomicSource(
+			"export function atomicReconcile(value) { return value; }",
+			"packages/dist/atomic-runtime.mjs",
+		);
+		expect(result.code).toContain("atomicReconcile");
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("CLASS_MAP");
+	});
+
 	it("rewrites JS sources", async () => {
 		const result = await transformAtomicSource(
 			`export const n = <div className="flex" />;`,

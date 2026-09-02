@@ -4,9 +4,20 @@ import path from "node:path";
 
 import {ATOMIC_RUNTIME} from "./constants";
 
-const VIRTUAL_RUNTIME_IMPORT = "virtual:tailwind-atomic/runtime";
+/** Package subpath — Turbopack treats `virtual:` as an unsupported external. */
+const VIRTUAL_RUNTIME_IMPORT = "tailwindcss-atomic/runtime";
 const VIRTUAL_RUNTIME_RESOLVED = "\0tailwind-atomic-runtime";
 const RUNTIME_FN = "_twAtomicReconcile";
+
+function isAtomicRuntimeModule(id: string) {
+	const clean = String(id).split("?")[0]?.replace(/\\/g, "/") ?? "";
+	if (!clean) return false;
+	if (clean === VIRTUAL_RUNTIME_IMPORT || clean === VIRTUAL_RUNTIME_RESOLVED) {
+		return true;
+	}
+	if (clean.includes("tailwind-atomic-runtime")) return true;
+	return /(?:^|\/)atomic-runtime\.(mjs|cjs|js|mts|cts|ts)$/.test(clean);
+}
 
 function packageDeclaresTwMerge(root: string) {
 	try {
@@ -107,5 +118,6 @@ export {
 	VIRTUAL_RUNTIME_RESOLVED,
 	RUNTIME_FN,
 	generateRuntimeModule,
+	isAtomicRuntimeModule,
 	projectHasTwMerge,
 };

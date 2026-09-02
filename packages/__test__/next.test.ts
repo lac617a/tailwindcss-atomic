@@ -59,6 +59,11 @@ describe("withTailwindAtomic", () => {
 		expect(typeof loaderRule.exclude).toBe("function");
 		expect(loaderRule.exclude?.("src/app.tsx")).toBe(false);
 		expect(loaderRule.exclude?.("node_modules/react/index.js")).toBe(true);
+		expect(
+			loaderRule.exclude?.(
+				"node_modules/tailwindcss-atomic/dist/atomic-runtime.mjs",
+			),
+		).toBe(false);
 		if (process.platform === "win32") {
 			expect(result?.cache).toEqual({type: "memory"});
 		}

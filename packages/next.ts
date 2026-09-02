@@ -4,6 +4,7 @@ import type {Configuration} from "webpack";
 import webpackTailwindAtomic from "./webpack";
 import {ATOMIC_RUNTIME} from "./shared/constants";
 import {shouldSkipJsTransform} from "./shared/js";
+import {isAtomicRuntimeModule} from "./shared/virtual-runtime";
 import {
 	discoverWorkspacePackageNames,
 	findMonorepoRoot,
@@ -40,6 +41,7 @@ type NextConfigFields = {
 	turbopack?: {
 		root?: string;
 		rules?: Record<string, unknown>;
+		resolveAlias?: Record<string, string | string[]>;
 	} | null;
 };
 
@@ -52,6 +54,7 @@ type AtomicNextConfig<T> = Omit<
 	turbopack: {
 		root: string;
 		rules: Record<string, TurboRule | TurboRule[]>;
+		resolveAlias?: Record<string, string | string[]>;
 	};
 	webpack: (
 		config: Configuration,
@@ -191,7 +194,9 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 			webpackConfig.module.rules ??= [];
 			webpackConfig.module.rules.unshift({
 				test: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
-				exclude: (resource: string) => shouldSkipJsTransform(resource),
+				exclude: (resource: string) =>
+					!isAtomicRuntimeModule(resource) &&
+					shouldSkipJsTransform(resource),
 				enforce: "pre",
 				use: [{loader: atomicLoader}],
 			});

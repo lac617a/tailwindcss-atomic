@@ -15,7 +15,7 @@ import {processArgument, processCvaCall} from "../core/process";
 import {
 	RUNTIME_FN,
 	VIRTUAL_RUNTIME_IMPORT,
-	VIRTUAL_RUNTIME_RESOLVED,
+	isAtomicRuntimeModule,
 } from "./virtual-runtime";
 
 function interopDefault<T>(mod: T | {default: T}): T {
@@ -141,12 +141,7 @@ function invalidateAtomicRuntimeModule() {
 	if (!server?.moduleGraph) return;
 	for (const [id, mod] of server.moduleGraph.idToModuleMap) {
 		if (!mod) continue;
-		if (
-			id === VIRTUAL_RUNTIME_RESOLVED ||
-			id === VIRTUAL_RUNTIME_IMPORT ||
-			id.includes("tailwind-atomic-runtime") ||
-			id.includes("virtual:tailwind-atomic/runtime")
-		) {
+		if (isAtomicRuntimeModule(id)) {
 			server.moduleGraph.invalidateModule(mod);
 		}
 	}

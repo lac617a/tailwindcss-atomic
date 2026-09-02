@@ -11,6 +11,7 @@ export default defineConfig({
 		"astro.ts",
 		"loader.ts",
 		"esbuild.ts",
+		"atomic-runtime.ts",
 	],
 	format: ["esm", "cjs"],
 	platform: "node",

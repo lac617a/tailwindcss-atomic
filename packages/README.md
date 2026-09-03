@@ -101,7 +101,7 @@ export default withTailwindAtomic({reactStrictMode: true});
 
 El path clásico `app/globals.css` con `@tailwind base/components/utilities` sigue igual.
 
-## Next.js 15 + Turbopack
+## Next.js 15.5+ / 16 + Turbopack
 
 ```ts
 // next.config.ts
@@ -116,7 +116,7 @@ export default withTailwindAtomic({
 { "scripts": { "dev": "next dev --turbopack --port 3019" } }
 ```
 
-`withTailwindAtomic` rellena `turbopack.rules` con el loader de TS/JS (además del hook de Webpack). El PostCSS de Tailwind 4 sigue siendo obligatorio. Ejemplo: `app/next-turbo-app` (`pnpm dev:turbo`).
+`withTailwindAtomic` rellena `turbopack.rules` con el loader de TS/JS (además del hook de Webpack). En Next 16.3+ las reglas son un array con `condition: "foreign"` y `condition: { not: "foreign" }`; el shorthand `{ foreign, default }` ya no pasa la validación. El PostCSS de Tailwind 4 sigue siendo obligatorio. Ejemplo: `app/next-turbo-app` (`pnpm dev:turbo`).
 
 ## Turborepo / monorepo (Next + Turbopack)
 
@@ -126,7 +126,7 @@ Eso pasa cuando el `cva()` / `cn()` vive en un design system fuera de la app (`p
 
 `withTailwindAtomic` ahora:
 
-1. Pone el loader en **`foreign` y `default`** para `*.ts(x)`, `*.js(x)`, `*.mjs` y `*.cjs` (el loader no-op en `react` / `next`; sí reescribe `transpilePackages` y junctions del workspace).
+1. Pone el loader en **`turbopack.rules`** para `*.ts(x)`, `*.js(x)`, `*.mjs` y `*.cjs` como un array de dos reglas: `condition: "foreign"` (node_modules / workspace) y `condition: { not: "foreign" }` (código de la app). El loader no-op en `react` / `next`; sí reescribe `transpilePackages` y junctions del workspace. Next 16.3 rechaza el shorthand `{ foreign, default }` (claves hermanas ya no válidas); Next 15.2 o anterior sigue recibiendo ese shorthand.
 2. Fija `turbopack.root` y `outputFileTracingRoot` en la raíz del monorepo (`turbo.json` / `pnpm-workspace.yaml`) si no los definiste.
 3. Añade a `transpilePackages` los paquetes del workspace que la app declara en `dependencies` (por ejemplo `ui-latamwin`).
 4. Hace warmup de **todas** las entradas CSS que encuentre (no solo la primera). Puedes forzar la de la web:

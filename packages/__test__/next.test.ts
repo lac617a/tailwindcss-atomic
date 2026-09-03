@@ -3,28 +3,75 @@ import type {Configuration} from "webpack";
 import {withTailwindAtomic} from "../next";
 import {ATOMIC_RUNTIME} from "../shared/constants";
 
+const readInstalledNextVersion = vi.hoisted(() =>
+	vi.fn((): string | undefined => undefined),
+);
+
+vi.mock("../shared/next-version", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../shared/next-version")>();
+	return {
+		...actual,
+		readInstalledNextVersion,
+	};
+});
+
 const loaderRule = {
 	loaders: [expect.stringMatching(/loader\.cjs$/)],
 	as: "*",
 };
 
+const appAndWorkspaceRules = [
+	{...loaderRule, condition: "foreign"},
+	{...loaderRule, condition: {not: "foreign"}},
+];
+
+function expectModernTurboRules(rules: Record<string, unknown>) {
+	for (const glob of ["*.tsx", "*.ts", "*.jsx", "*.js", "*.mjs", "*.cjs"]) {
+		expect(rules[glob]).toEqual(appAndWorkspaceRules);
+		expect(rules[glob]).not.toHaveProperty("foreign");
+		expect(rules[glob]).not.toHaveProperty("default");
+	}
+}
+
 describe("withTailwindAtomic", () => {
+	beforeEach(() => {
+		readInstalledNextVersion.mockReturnValue(undefined);
+	});
+
 	it("injects turbopack loader rules for app and workspace files", () => {
+		const config = withTailwindAtomic();
+		const rules = config.turbopack?.rules ?? {};
+		expectModernTurboRules(rules);
+		expect(config.turbopack?.root).toBeTruthy();
+		expect(config.outputFileTracingRoot).toBe(config.turbopack?.root);
+	});
+
+	it("uses condition arrays on Next 16+ instead of nested foreign/default keys", () => {
+		readInstalledNextVersion.mockReturnValue("16.3.0");
+		const config = withTailwindAtomic();
+		expectModernTurboRules(config.turbopack?.rules ?? {});
+	});
+
+	it("uses condition arrays on Next 15.5+", () => {
+		readInstalledNextVersion.mockReturnValue("15.5.0");
+		const config = withTailwindAtomic();
+		expectModernTurboRules(config.turbopack?.rules ?? {});
+	});
+
+	it("emits nested foreign/default rules on Next 15.2 and earlier", () => {
+		readInstalledNextVersion.mockReturnValue("15.2.4");
 		const config = withTailwindAtomic();
 		const rules = config.turbopack?.rules ?? {};
 		expect(rules["*.tsx"]).toEqual({
 			foreign: loaderRule,
 			default: loaderRule,
 		});
-		expect(rules["*.ts"]).toBeDefined();
-		expect(rules["*.jsx"]).toBeDefined();
 		expect(rules["*.js"]).toEqual({
 			foreign: loaderRule,
 			default: loaderRule,
 		});
 		expect(rules["*.mjs"]).toBeDefined();
-		expect(config.turbopack?.root).toBeTruthy();
-		expect(config.outputFileTracingRoot).toBe(config.turbopack?.root);
+		expect(rules["*.cjs"]).toBeDefined();
 	});
 
 	it("keeps user turbopack rules and calls the original webpack hook", () => {
@@ -44,6 +91,7 @@ describe("withTailwindAtomic", () => {
 			loaders: ["svgo"],
 			as: "*.js",
 		});
+		expect(config.turbopack?.rules?.["*.tsx"]).toEqual(appAndWorkspaceRules);
 
 		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
 		const result = config.webpack?.(webpackConfig, {dev: true});
@@ -177,10 +225,10 @@ describe("withTailwindAtomic", () => {
 			vi.resetModules();
 			const {withTailwindAtomic: fresh} = await import("../next");
 			const config = fresh();
-			const tsx = config.turbopack?.rules?.["*.tsx"] as {
-				default?: {loaders?: string[]};
-			};
-			expect(tsx.default?.loaders?.[0]?.replace(/\\/g, "/")).toMatch(
+			const tsx = config.turbopack?.rules?.["*.tsx"] as Array<{
+				loaders?: string[];
+			}>;
+			expect(tsx[0]?.loaders?.[0]?.replace(/\\/g, "/")).toMatch(
 				/loader\.cjs$/,
 			);
 		} finally {

@@ -4,6 +4,10 @@ import type {Configuration} from "webpack";
 import webpackTailwindAtomic from "./webpack";
 import {ATOMIC_RUNTIME} from "./shared/constants";
 import {shouldSkipJsTransform} from "./shared/js";
+import {
+	readInstalledNextVersion,
+	useLegacyTurboRuleShorthand,
+} from "./shared/next-version";
 import {isAtomicRuntimeModule} from "./shared/virtual-runtime";
 import {
 	discoverWorkspacePackageNames,
@@ -20,18 +24,36 @@ type NextWebpackOptions = {
 	[key: string]: unknown;
 };
 
-type TurboRuleOptions = {
+type TurbopackLoaderBuiltinCondition =
+	| "browser"
+	| "foreign"
+	| "development"
+	| "production"
+	| "node"
+	| "edge-light";
+
+type TurbopackRuleCondition =
+	| TurbopackLoaderBuiltinCondition
+	| {not: TurbopackRuleCondition}
+	| {all: TurbopackRuleCondition[]}
+	| {any: TurbopackRuleCondition[]};
+
+type TurboRuleConfigItem = {
 	loaders: string[];
 	as?: string;
+	condition?: TurbopackRuleCondition;
 };
 
-/** Next 15: `foreign` = node_modules / files outside the app dir. */
-type TurboRule =
-	| TurboRuleOptions
-	| {
-			foreign?: TurboRule | false;
-			default?: TurboRule | false;
-	  };
+/** Next 16: `condition` selects when a rule runs. Arrays apply every match. */
+type TurboRuleConfigCollection =
+	| TurboRuleConfigItem
+	| TurboRuleConfigItem[];
+
+/** Next 15.2 and earlier: nested keys, not `condition`. */
+type LegacyTurboRuleShorthand = {
+	foreign?: TurboRuleConfigItem | false;
+	default?: TurboRuleConfigItem | false;
+};
 
 /** Fields we read from Next.js config. `T extends object` so Next's own types stay assignable. */
 type NextConfigFields = {
@@ -53,7 +75,7 @@ type AtomicNextConfig<T> = Omit<
 	outputFileTracingRoot?: string;
 	turbopack: {
 		root: string;
-		rules: Record<string, TurboRule | TurboRule[]>;
+		rules: Record<string, TurboRuleConfigCollection>;
 		resolveAlias?: Record<string, string | string[]>;
 	};
 	webpack: (
@@ -73,7 +95,9 @@ function resolveAtomicLoader() {
 	}
 }
 
-function turboLoaderRules(atomicLoader: string): Record<string, TurboRule> {
+function turboLoaderRules(
+	atomicLoader: string,
+): Record<string, TurboRuleConfigCollection | LegacyTurboRuleShorthand> {
 	// `as: '*'` keeps the original name. `as: '*.tsx'` on a `.tsx` file becomes
 	// `file.tsx.tsx` because `*` is the full filename.
 	//
@@ -81,14 +105,20 @@ function turboLoaderRules(atomicLoader: string): Record<string, TurboRule> {
 	// in packages/ui (outside the Next app dir) or in node_modules/.pnpm dist.
 	// Webpack already rewrites those via transpilePackages; Turbopack skipped
 	// them, which left mixed classNames (`flex … _cafc46`).
-	const withLoader: TurboRuleOptions = {
+	//
+	// Next 16.3 dropped the undocumented `{ foreign, default }` shorthand
+	// (vercel/next.js#83068). `foreign` is a condition, not a sibling key.
+	const withLoader: TurboRuleConfigItem = {
 		loaders: [atomicLoader],
 		as: "*",
 	};
-	const appAndWorkspace: TurboRule = {
-		foreign: withLoader,
-		default: withLoader,
-	};
+	const appAndWorkspace: TurboRuleConfigCollection | LegacyTurboRuleShorthand =
+		useLegacyTurboRuleShorthand(readInstalledNextVersion())
+			? {foreign: withLoader, default: withLoader}
+			: [
+					{...withLoader, condition: "foreign"},
+					{...withLoader, condition: {not: "foreign"}},
+				];
 
 	return {
 		"*.tsx": appAndWorkspace,

@@ -16,7 +16,7 @@ pnpm dev:turbo
 `withTailwindAtomic` configura:
 
 - **Webpack** (`webpack()`, por si corres `next dev` sin flag)
-- **Turbopack** (`turbopack.rules` con el loader en `*.tsx` / `*.ts` / `*.jsx`, sin tocar `node_modules`)
+- **Turbopack** (`turbopack.rules` con el loader en `*.tsx` / `*.ts` / `*.jsx` / `*.js` / `*.mjs` / `*.cjs`, con `condition: "foreign"` y `{ not: "foreign" }` para app + workspace)
 - **PostCSS** — sigue haciendo falta `tailwindcss-atomic/postcss` después de Tailwind
 
 En un monorepo pnpm hay que fijar `turbopack.root` (y `outputFileTracingRoot`) a la raíz del workspace. Si no, Turbopack no resuelve el paquete `next` y peta con `Next.js package not found`.

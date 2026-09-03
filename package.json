@@ -2,6 +2,7 @@
 	"name": "tailwind-atomic-wasm",
 	"private": true,
 	"license": "MIT",
+	"packageManager": "pnpm@8.15.0",
 	"scripts": {
 		"build": "pnpm build:wasm && pnpm build:js",
 		"build:wasm": "wasm-pack build --target nodejs --no-pack --out-dir packages/pkg && node -e \"require('fs').writeFileSync('packages/pkg/package.json', JSON.stringify({type:'commonjs'}))\"",

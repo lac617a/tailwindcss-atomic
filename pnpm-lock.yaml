@@ -20,9 +20,6 @@ importers:
 
   app/astro-app:
     dependencies:
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
       tailwindcss-atomic:
         specifier: workspace:*
         version: link:../../packages

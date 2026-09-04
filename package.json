@@ -11,6 +11,7 @@
 		"dev:vite": "pnpm --filter vite-app dev",
 		"dev:vite4": "pnpm --filter vite-v4-app dev",
 		"dev:astro": "pnpm --filter astro-app dev",
+		"dev:website": "pnpm --filter website dev",
 		"dev:next12": "pnpm --filter next12-app dev",
 		"dev:turbo": "pnpm --filter next-turbo-app dev",
 		"dev:examples": "turbo run dev --filter=next-app --filter=vite-app --filter=vite-v4-app --filter=next12-app --filter=next-turbo-app --filter=astro-app",
@@ -25,5 +26,11 @@
 	},
 	"engines": {
 		"node": ">=22.18.0"
+	},
+	"pnpm": {
+		"overrides": {
+			"nextra>zod": "4.3.6",
+			"nextra-theme-docs>zod": "4.3.6"
+		}
 	}
 }

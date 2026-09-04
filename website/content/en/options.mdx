@@ -1,0 +1,72 @@
+---
+title: Options
+---
+
+import {Callout} from "nextra/components";
+
+# Options
+
+Pass a second argument to `withTailwindAtomic`, or the same object to Vite / Webpack / Rollup / esbuild / Astro plugins.
+
+```ts
+type Options = {
+  /** Functions whose string arguments are rewritten. */
+  targetFunctions?: Set<string>;
+  /** Already-compiled Tailwind CSS, to preload the map (uncommon). */
+  tailwindCss?: string;
+  /** Packages under node_modules whose JS is rewritten (design systems). */
+  transpilePackages?: string[];
+  /** Extra CSS that is not atomicized (on top of node_modules). */
+  ignoreCss?: Array<string | RegExp>;
+  /** Functions whose strings are left intact (default `twIgnore`). */
+  preserveFunctions?: Iterable<string>;
+  /** JSON inventory of the map. `false` disables it. */
+  classMapFile?: string | boolean;
+  /** Extra CSS/SCSS entries for warmup (monorepos: `scss/styles.scss`). */
+  cssEntries?: string[];
+};
+```
+
+## Defaults
+
+- `targetFunctions`: `cn`, `clsx`, `classnames`, `cva`
+- `preserveFunctions`: `twIgnore`
+- `classMapFile`: `node_modules/.cache/tailwindcss-atomic/class-map.json`
+
+```ts
+withTailwindAtomic(nextConfig, {
+  targetFunctions: new Set(["cn", "clsx", "tw"]),
+});
+```
+
+## `transpilePackages`
+
+Use this when class strings live in a workspace UI package or in `node_modules`. Without it, Turbopack/Webpack may leave `flex` in the published JS while the app CSS is already hashed.
+
+## `cssEntries`
+
+Force warmup of SCSS/CSS files that are not the first stylesheet Next discovers. Typical in monorepos:
+
+```ts
+export default withTailwindAtomic(nextConfig, {
+  cssEntries: ["scss/styles.scss"],
+});
+```
+
+## `classMapFile`
+
+Set a custom path, or `false` to skip writing the inventory.
+
+```ts
+tailwindAtomic({
+  classMapFile: ".cache/atomic-class-map.json",
+});
+```
+
+## `ignoreCss`
+
+Skip atomicizing extra CSS besides `node_modules` (third-party sheets you import into the app bundle).
+
+<Callout>
+  The map is written so JS/HTML rewrite does not race PostCSS.
+</Callout>

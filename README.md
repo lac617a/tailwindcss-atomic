@@ -37,6 +37,7 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | `app/next-turbo-app/` | Next.js 15 · App Router · Turbopack |
 | `app/vite-v4-app/` | Vite · React 18 · Tailwind 4 |
 | `app/astro-app/` | Astro 5 · Tailwind 4 |
+| `website/` | Docs (Nextra) · [atomic.profiya.com](https://atomic.profiya.com/) |
 
 SCSS con `@use 'tailwindcss/base|components|utilities'` (Tailwind 3 + Next 15) está documentado en [`packages/README.md`](packages/README.md).
 
@@ -62,6 +63,7 @@ pnpm dev:next12     # Next 12 · http://localhost:3018
 pnpm dev:turbo      # Next 15 Turbopack · http://localhost:3019
 pnpm dev:vite4      # Vite · Tailwind 4 · http://localhost:3020
 pnpm dev:astro      # Astro 5 · http://localhost:3021
+pnpm dev:website    # Docs Nextra · http://localhost:3022
 pnpm dev:examples   # todos los ejemplos a la vez (Turborepo)
 ```
 

@@ -1,0 +1,74 @@
+---
+title: Getting started
+---
+
+import {Callout, Tabs} from "nextra/components";
+
+# Getting started
+
+Install the plugin, put it **after** Tailwind in PostCSS, then register the bundler adapter.
+
+```sh
+pnpm add -D tailwindcss-atomic
+```
+
+Peer: `postcss` ≥ 8. Node.js ≥ 22.18.0. Webpack ≥ 5 is optional (only if you use that bundler). `sass` is an optional peer for SCSS warmup with local `@use`.
+
+## 1. PostCSS after Tailwind
+
+<Tabs items={["Tailwind v4", "Tailwind v3"]}>
+<Tabs.Tab>
+
+```js
+// postcss.config.mjs
+export default {
+  plugins: {
+    "@tailwindcss/postcss": {},
+    "tailwindcss-atomic/postcss": {},
+  },
+};
+```
+
+</Tabs.Tab>
+<Tabs.Tab>
+
+The plugin goes **after** `tailwindcss` and `autoprefixer`.
+
+```js
+// postcss.config.js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+    "tailwindcss-atomic/postcss": {},
+  },
+};
+```
+
+</Tabs.Tab>
+</Tabs>
+
+<Callout type="warning">
+  If atomic PostCSS is missing or runs before Tailwind, the class map never exists and JS rewrite has nothing to apply.
+</Callout>
+
+## 2. Register the bundler plugin
+
+| Tool | Entry |
+| --- | --- |
+| Next.js | `tailwindcss-atomic/next` → `withTailwindAtomic` |
+| Vite | `tailwindcss-atomic/vite` |
+| Astro | `tailwindcss-atomic/astro` |
+| Webpack | `tailwindcss-atomic/webpack` |
+| Rollup | `tailwindcss-atomic/rollup` |
+| esbuild | `tailwindcss-atomic/esbuild` |
+
+Copy-paste setups live in [Integrations](./integrations).
+
+## 3. Confirm it worked
+
+1. Inspect the DOM: `className` should show hashes like `_aa7b5f`, not `flex` or `p-6`.
+2. Compiled CSS includes the comment `/*! tailwind-atomic */` and rules such as `._aa7b5f { … }`.
+3. Strings inside `cn()`, `clsx()`, and `cva()` are rewritten too.
+
+The map `flex` → `_xxxxxx` is stored at `node_modules/.cache/tailwindcss-atomic/class-map.json` so JS/HTML rewrite does not depend on PostCSS having already run.

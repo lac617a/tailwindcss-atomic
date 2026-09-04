@@ -1,0 +1,259 @@
+---
+title: Integraciones
+---
+
+import {Callout} from "nextra/components";
+
+# Integraciones
+
+Los fixtures verificados viven en `app/` del repo.
+
+| Fixture | Entrada | Comando |
+| --- | --- | --- |
+| `app/next-app` | Next 15 · App Router · Tailwind 4 | `pnpm dev` · puerto 3016 |
+| `app/vite-app` | Vite · React 18 · Tailwind 3 | `pnpm dev:vite` · 3017 |
+| `app/next12-app` | Next 12 · Pages Router · Tailwind 3 | `pnpm dev:next12` · 3018 |
+| `app/next-turbo-app` | Next 15 · Turbopack | `pnpm dev:turbo` · 3019 |
+| `app/vite-v4-app` | Vite · Tailwind 4 | `pnpm dev:vite4` · 3020 |
+| `app/astro-app` | Astro 5 · Tailwind 4 | `pnpm dev:astro` · 3021 |
+
+## Next.js 15 (App Router, Tailwind 4)
+
+```ts
+// next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+const nextConfig = {reactStrictMode: true};
+
+export default withTailwindAtomic(nextConfig);
+```
+
+Mantén PostCSS con `@tailwindcss/postcss` **y después** `tailwindcss-atomic/postcss`.
+
+## Next.js 15 + Tailwind 3 + SCSS
+
+Tailwind v3 no expande `@use 'tailwindcss/utilities'`; espera `@tailwind utilities`. Si la entrada es SCSS (por ejemplo `scss/styles.scss` importada desde `app/layout.tsx`) el warmup **normaliza** esas capas y, si está instalado `sass`, compila los `@use` locales antes de PostCSS. Así el mapa `flex` → `_xxxxxx` existe **antes** de que Webpack transforme los bundles de App Router (client, SSR y RSC).
+
+```scss
+// scss/styles.scss
+@use 'tailwindcss/base';
+@use 'tailwindcss/components';
+@use 'tailwindcss/utilities';
+@use './themes/brand' as themes;
+```
+
+```ts
+// app/layout.tsx
+import "../scss/styles.scss";
+```
+
+```js
+// postcss.config.js — el plugin atomic va el último
+module.exports = {
+  plugins: {
+    "postcss-import": {},
+    "tailwindcss/nesting": {},
+    tailwindcss: {},
+    autoprefixer: {},
+    "tailwindcss-atomic/postcss": {},
+  },
+};
+```
+
+```ts
+// next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({reactStrictMode: true});
+```
+
+`withTailwindAtomic` inyecta el loader de Webpack (pre) y el plugin que, en `processAssets`, atomiciza **todo** el CSS y después reescribe **todo** el JS (incluidos chunks de servidor). En `next dev` invalida módulos JS cuando cambia el mapa.
+
+El path clásico `app/globals.css` con `@tailwind base/components/utilities` sigue igual.
+
+## Next.js 15.5+ / 16 + Turbopack
+
+```ts
+// next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({
+  reactStrictMode: true,
+});
+```
+
+```json
+{ "scripts": { "dev": "next dev --turbopack --port 3019" } }
+```
+
+`withTailwindAtomic` rellena `turbopack.rules` con el loader de TS/JS (además del hook de Webpack). En Next 16.3+ las reglas son un array con `condition: "foreign"` y `condition: { not: "foreign" }`; el shorthand `{ foreign, default }` ya no pasa la validación. El PostCSS de Tailwind 4 sigue siendo obligatorio.
+
+## Turborepo / monorepo (Next + Turbopack)
+
+Un className mixto (`flex … hover:bg-revamp-… _cafc46 _ffc2a9`) significa que **el CSS sí se atomicizó** pero **parte del JS no se reescribió**. En Webpack el plugin recorre todos los chunks en `processAssets`. Turbopack no tiene ese paso: solo reescribe los módulos que pasan por el loader.
+
+Eso pasa cuando el `cva()` / `cn()` vive en un design system fuera de la app (`packages/ui`, `node_modules/ui-latamwin`) y las reglas de Turbopack solo tocaban el código de `apps/webs/latamwin`.
+
+`withTailwindAtomic` ahora:
+
+1. Pone el loader en **`turbopack.rules`** para `*.ts(x)`, `*.js(x)`, `*.mjs` y `*.cjs` como un array de dos reglas: `condition: "foreign"` (node_modules / workspace) y `condition: { not: "foreign" }` (código de la app). El loader no-op en `react` / `next`; sí reescribe `transpilePackages` y junctions del workspace.
+2. Fija `turbopack.root` y `outputFileTracingRoot` en la raíz del monorepo (`turbo.json` / `pnpm-workspace.yaml`) si no los definiste.
+3. Añade a `transpilePackages` los paquetes del workspace que la app declara en `dependencies`.
+4. Hace warmup de **todas** las entradas CSS que encuentre (no solo la primera). Puedes forzar la de la web:
+
+```ts
+// apps/webs/latamwin/next.config.ts
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+const nextConfig = {
+  reactStrictMode: true,
+  transpilePackages: ["ui-latamwin"],
+};
+
+export default withTailwindAtomic(nextConfig, {
+  cssEntries: ["scss/styles.scss"],
+});
+```
+
+<Callout type="warning">
+  Si un paquete UI se publica como `dist/*.js` y no está en `transpilePackages`, sus strings `flex` / `bg-*` llegan intactos al DOM y se mezclan con los hashes de la app. Añádelo a `transpilePackages` o importa el source (`exports` → `src`).
+</Callout>
+
+## Next.js 12 (Pages Router, Tailwind 3)
+
+```js
+// next.config.mjs
+import {withTailwindAtomic} from "tailwindcss-atomic/next";
+
+export default withTailwindAtomic({
+  reactStrictMode: true,
+});
+```
+
+Usa `pages/`, `styles/globals.css` con `@tailwind base/components/utilities` y el PostCSS de v3 de [Empezar](./getting-started).
+
+## Vite (Tailwind 4)
+
+No hace falta `tailwind.config.js`. La entrada CSS usa `@import "tailwindcss"` (y opcionalmente `@theme`).
+
+La forma recomendada con Vite es `@tailwindcss/vite`. **No** hace falta `@tailwindcss/postcss` ni `postcss.config`:
+
+```ts
+// vite.config.ts
+import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss(), tailwindAtomic()],
+});
+```
+
+Si prefieres PostCSS en vez del plugin de Vite:
+
+```js
+// postcss.config.mjs
+export default {
+  plugins: {
+    "@tailwindcss/postcss": {},
+    "tailwindcss-atomic/postcss": {},
+  },
+};
+```
+
+```ts
+// vite.config.ts
+import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindAtomic()],
+});
+```
+
+## Vite (Tailwind 3)
+
+```ts
+import {defineConfig} from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindAtomic()],
+});
+```
+
+El PostCSS de v3 va **después** de `tailwindcss` y `autoprefixer`.
+
+## Astro (Tailwind 4)
+
+Astro usa Vite. Tailwind v4 va con `@tailwindcss/vite` (no `@astrojs/tailwind`). La integración `tailwindcss-atomic/astro` inyecta el rewrite de `class` en `.astro`, JS extraído y CSS:
+
+```ts
+// astro.config.ts
+import {defineConfig} from "astro/config";
+import tailwindcss from "@tailwindcss/vite";
+import tailwindAtomic from "tailwindcss-atomic/astro";
+
+export default defineConfig({
+  integrations: [tailwindAtomic()],
+  vite: {
+    plugins: [tailwindcss()],
+  },
+});
+```
+
+```astro
+---
+import "../styles/global.css";
+---
+<div class="flex p-6">Hola</div>
+```
+
+Si prefieres no usar la integración, el plugin de Vite hace lo mismo:
+
+```ts
+import tailwindAtomic from "tailwindcss-atomic/vite";
+
+export default defineConfig({
+  vite: {
+    plugins: [tailwindcss(), tailwindAtomic()],
+  },
+});
+```
+
+## Webpack
+
+```js
+const tailwindAtomic = require("tailwindcss-atomic/webpack");
+
+module.exports = {
+  plugins: [tailwindAtomic()],
+};
+```
+
+## Rollup
+
+```js
+import tailwindAtomic from "tailwindcss-atomic/rollup";
+
+export default {
+  plugins: [tailwindAtomic()],
+};
+```
+
+## esbuild
+
+```js
+import {build} from "esbuild";
+import tailwindAtomic from "tailwindcss-atomic/esbuild";
+
+await build({
+  entryPoints: ["src/main.ts"],
+  bundle: true,
+  outfile: "dist/index.js",
+  plugins: [tailwindAtomic()],
+});
+```

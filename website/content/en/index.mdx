@@ -1,0 +1,46 @@
+---
+title: Atomic CSS for Tailwind
+---
+
+import {Callout, Cards} from "nextra/components";
+import {BeforeAfter} from "../../app/_components/before-after";
+
+# tailwindcss-atomic
+
+A plugin that splits Tailwind CSS into one class per declaration and rewrites `className` in your code to short hashes (`_aa7b5f`).
+
+The hashing and atomicization engine is **Rust compiled to WebAssembly**. The JavaScript layer (PostCSS + unplugin) connects that engine to Vite, Webpack, Rollup, esbuild, Next.js, and Astro.
+
+<BeforeAfter beforeLabel="Before" afterLabel="After" />
+
+<Callout type="info">
+  The `_` prefix keeps class names from starting with a digit (invalid in CSS). The suffix is 6 hex digits — about 16.7 million values.
+</Callout>
+
+## Why atomic?
+
+Tailwind emits one rule per utility. This project goes one step further: **one class per CSS declaration**, then deduplicates. HTML gets shorter, original utilities disappear from the DOM, and shared declarations (the same `display: flex` from two different sources) collapse to a single class.
+
+## Two-step pipeline
+
+1. **PostCSS** — must run **after** Tailwind. It reads the expanded CSS, splits rules, and builds the map `flex` → `_215464`.
+2. **Bundler plugin** — rewrites strings in JSX and in calls to `cn`, `clsx`, `classnames`, and `cva`.
+
+Without step 1 the CSS is not atomic. Without step 2 the DOM still shows `flex` and `p-6`.
+
+## Quick start
+
+```sh
+pnpm add -D tailwindcss-atomic
+```
+
+Peer: `postcss` ≥ 8. Node.js ≥ 22.18.0.
+
+Then pick your bundler in [Integrations](./integrations).
+
+<Cards>
+  <Cards.Card arrow title="Getting started" href="./getting-started" />
+  <Cards.Card arrow title="How it works" href="./how-it-works" />
+  <Cards.Card arrow title="Integrations" href="./integrations" />
+  <Cards.Card arrow title="Options" href="./options" />
+</Cards>

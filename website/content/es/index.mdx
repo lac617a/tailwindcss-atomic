@@ -1,0 +1,46 @@
+---
+title: CSS atómico para Tailwind
+---
+
+import {Callout, Cards} from "nextra/components";
+import {BeforeAfter} from "../../app/_components/before-after";
+
+# tailwindcss-atomic
+
+Plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
+
+El motor de hashing y atomicización vive en **Rust compilado a WebAssembly**. El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
+
+<BeforeAfter beforeLabel="Antes" afterLabel="Después" />
+
+<Callout type="info">
+  El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El sufijo son 6 dígitos hex, unos 16,7 millones de valores.
+</Callout>
+
+## Por qué atómico
+
+Tailwind emite una regla por utilidad. Este proyecto va un paso más: **una clase por declaración CSS**, y las deduplica. El HTML pesa menos, las utilidades originales no quedan a la vista, y las declaraciones compartidas (el mismo `display: flex` de dos sitios) colapsan a una sola clase.
+
+## Pipeline en dos pasos
+
+1. **PostCSS** — debe ir **después** de Tailwind. Lee las reglas expandidas, las parte y arma el mapa `flex` → `_215464`.
+2. **Plugin del bundler** — sustituye strings en JSX y en llamadas a `cn`, `clsx`, `classnames` y `cva`.
+
+Sin el paso 1 el CSS no se atomiciza. Sin el paso 2 el DOM sigue con `flex` y `p-6`.
+
+## Inicio rápido
+
+```sh
+pnpm add -D tailwindcss-atomic
+```
+
+Peer: `postcss` ≥ 8. Node.js ≥ 22.18.0.
+
+Después elige tu bundler en [Integraciones](./integrations).
+
+<Cards>
+  <Cards.Card arrow title="Empezar" href="./getting-started" />
+  <Cards.Card arrow title="Cómo funciona" href="./how-it-works" />
+  <Cards.Card arrow title="Integraciones" href="./integrations" />
+  <Cards.Card arrow title="Opciones" href="./options" />
+</Cards>

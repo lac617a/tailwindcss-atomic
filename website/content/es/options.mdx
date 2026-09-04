@@ -1,0 +1,72 @@
+---
+title: Opciones
+---
+
+import {Callout} from "nextra/components";
+
+# Opciones
+
+Pasa un segundo argumento a `withTailwindAtomic`, o el mismo objeto a los plugins de Vite / Webpack / Rollup / esbuild / Astro.
+
+```ts
+type Options = {
+  /** Funciones cuyos argumentos de string se reescriben. */
+  targetFunctions?: Set<string>;
+  /** CSS de Tailwind ya compilado, para precargar el mapa (poco habitual). */
+  tailwindCss?: string;
+  /** Paquetes bajo node_modules cuyo JS sí se reescribe (design systems). */
+  transpilePackages?: string[];
+  /** CSS extra que no se atomiciza (además de node_modules). */
+  ignoreCss?: Array<string | RegExp>;
+  /** Funciones cuyos strings se dejan intactos (por defecto `twIgnore`). */
+  preserveFunctions?: Iterable<string>;
+  /** Inventario JSON del mapa. `false` lo desactiva. */
+  classMapFile?: string | boolean;
+  /** Entradas CSS/SCSS extra para el warmup (monorepos: `scss/styles.scss`). */
+  cssEntries?: string[];
+};
+```
+
+## Valores por defecto
+
+- `targetFunctions`: `cn`, `clsx`, `classnames`, `cva`
+- `preserveFunctions`: `twIgnore`
+- `classMapFile`: `node_modules/.cache/tailwindcss-atomic/class-map.json`
+
+```ts
+withTailwindAtomic(nextConfig, {
+  targetFunctions: new Set(["cn", "clsx", "tw"]),
+});
+```
+
+## `transpilePackages`
+
+Úsalo cuando los strings de clase viven en un paquete UI del workspace o en `node_modules`. Sin esto, Turbopack/Webpack pueden dejar `flex` en el JS publicado mientras el CSS de la app ya está hasheado.
+
+## `cssEntries`
+
+Fuerza el warmup de ficheros SCSS/CSS que no son la primera hoja que descubre Next. Típico en monorepos:
+
+```ts
+export default withTailwindAtomic(nextConfig, {
+  cssEntries: ["scss/styles.scss"],
+});
+```
+
+## `classMapFile`
+
+Ruta personalizada, o `false` para no escribir el inventario.
+
+```ts
+tailwindAtomic({
+  classMapFile: ".cache/atomic-class-map.json",
+});
+```
+
+## `ignoreCss`
+
+Salta la atomicización de CSS extra además de `node_modules` (hojas de terceros que importas al bundle).
+
+<Callout>
+  El mapa se escribe para que el rewrite de JS/HTML no dependa de que PostCSS haya corrido antes.
+</Callout>

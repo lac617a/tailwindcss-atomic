@@ -1,0 +1,59 @@
+---
+title: Cómo funciona
+---
+
+import {Callout} from "nextra/components";
+
+# Cómo funciona
+
+Tailwind emite reglas como:
+
+```css
+.flex {
+  display: flex;
+}
+.p-6 {
+  padding: 1.5rem;
+}
+```
+
+`tailwindcss-atomic` las descompone en una clase por declaración y las deduplica. En el DOM, `className="flex p-6"` pasa a algo como `class="_215464 _69df78"`. El HTML pesa menos y las utilidades originales no quedan a la vista.
+
+## Pipeline
+
+```
+Fuente (JSX / HTML / Astro)
+        │
+        ▼
+ Tailwind expande @tailwind / @import "tailwindcss"
+        │
+        ▼
+ Plugin PostCSS  →  CSS atómico + mapa (flex → _215464)
+        │
+        ▼
+ Plugin del bundler  →  reescribe className, cn(), clsx(), cva()
+        │
+        ▼
+ Bundle de producción con clases hasheadas
+```
+
+El crate Rust (`lightningcss` + `wasm-bindgen`) atomiciza CSS y reescribe class strings y HTML. Tras cambiar `src/lib.rs` hay que volver a `pnpm build:wasm` y reiniciar el servidor de desarrollo: el módulo WASM se carga al arrancar el proceso.
+
+## Qué se reescribe
+
+Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben:
+
+- atributos JSX `className` / `class`
+- props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`
+- atributos `class` en HTML (`index.html`, assets emitidos)
+- plantillas Astro (`.astro`, scripts extraídos y `class:list` estático)
+
+Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`. Ver [Conservar y runtime](./preserve).
+
+## Los selectores se conservan
+
+A diferencia de un rename 1:1, cada declaración se vuelve su propia clase; el resto del selector se **conserva** (`._hash:hover`, combinadores de `space-y-*`, el `@media` de `sm:`). Así no se pierde hover ni breakpoints.
+
+<Callout>
+  Se dejan intactos `@theme`, `:root`, preflight, `@keyframes` y at-rules anidadas (`@media`, `@supports`, `@container`). Solo se atomicizan las reglas de utilidad.
+</Callout>

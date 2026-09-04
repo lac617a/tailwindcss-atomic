@@ -30,7 +30,7 @@ function astroResourceType(id: string): "style" | "script" | "template" {
 
 /**
  * Rewrite class / className attributes in HTML (Vite index.html, emitted
- * assets). Same idea as tailwindcss-mangle's htmlHandler, without a full parser.
+ * assets).
  */
 function transformHtml(html: string) {
 	if (!html || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {

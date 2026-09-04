@@ -316,7 +316,7 @@ type Options = {
 	ignoreCss?: Array<string | RegExp>;
 	/** Funciones cuyos strings se dejan intactos (por defecto `twIgnore`). */
 	preserveFunctions?: Iterable<string>;
-	/** Inventario JSON del mapa (como `.tw-patch` en tailwindcss-mangle). `false` lo desactiva. */
+	/** Inventario JSON del mapa. `false` lo desactiva. */
 	classMapFile?: string | boolean;
 	/** Entradas CSS/SCSS extra para el warmup (monorepos: `scss/styles.scss`). */
 	cssEntries?: string[];
@@ -327,7 +327,7 @@ Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se
 
 Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`.
 
-El mapa `flex` → `_xxxxxx` se guarda en `node_modules/.cache/tailwindcss-atomic/class-map.json` para que el rewrite de JS/HTML no dependa de que PostCSS haya corrido antes (el mismo patrón de inventario que [tailwindcss-mangle](https://github.com/sonofmagic/tailwindcss-mangle)).
+El mapa `flex` → `_xxxxxx` se guarda en `node_modules/.cache/tailwindcss-atomic/class-map.json` para que el rewrite de JS/HTML no dependa de que PostCSS haya corrido antes
 
 ```ts
 withTailwindAtomic(nextConfig, {

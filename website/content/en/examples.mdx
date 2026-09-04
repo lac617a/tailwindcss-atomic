@@ -1,0 +1,25 @@
+---
+title: Examples
+---
+
+# Examples
+
+The monorepo ships runnable apps. From the repo root, after `pnpm install` and `pnpm build`:
+
+| Command | App | Port |
+| --- | --- | --- |
+| `pnpm dev` | Next.js 15 · App Router · Tailwind 4 | 3016 |
+| `pnpm dev:vite` | Vite · React 18 · Tailwind 3 | 3017 |
+| `pnpm dev:next12` | Next.js 12 · Pages Router · Tailwind 3 | 3018 |
+| `pnpm dev:turbo` | Next.js 15 · Turbopack | 3019 |
+| `pnpm dev:vite4` | Vite · Tailwind 4 | 3020 |
+| `pnpm dev:astro` | Astro 5 · Tailwind 4 | 3021 |
+| `pnpm dev:examples` | All example apps at once (Turborepo) | — |
+
+## What to look at
+
+1. Inspect the DOM: `className` should not show `flex` or `bg-zinc-950`, but hashes `_` + 6 hex.
+2. Compiled CSS includes `/*! tailwind-atomic */` and rules `._aa7b5f { … }`.
+3. The chip that uses `cn()` is rewritten as well (active/inactive state).
+
+Source: [github.com/lac617a/tailwindcss-atomic](https://github.com/lac617a/tailwindcss-atomic).

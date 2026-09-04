@@ -136,7 +136,7 @@ pub fn lookup_mapped_class<'a>(
     class_map.get(&normalized).map(String::as_str)
 }
 
-/// Split on whitespace / quotes (same idea as tailwindcss-mangle `splitCode`)
+/// Split on whitespace / quotes
 /// and replace known utilities. Longer keys win when a token could match two
 /// map entries (`bg-red-500/50` before `bg-red-500`).
 pub fn rewrite_class_string(class_str: &str, class_map: &HashMap<String, String>) -> String {

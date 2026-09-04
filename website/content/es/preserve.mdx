@@ -1,0 +1,39 @@
+---
+title: Conservar y runtime
+---
+
+import {Callout} from "nextra/components";
+
+# Conservar y runtime
+
+## Qué se deja intacto
+
+El motor Rust (WASM) solo atomiciza reglas de **utilidad**. Se conservan:
+
+- `@theme`
+- `:root`
+- preflight
+- `@keyframes`
+- at-rules anidadas (`@media`, `@supports`, `@container`)
+
+El resto del selector se **conserva**: `._hash:hover`, combinadores de `space-y-*`, el `@media` de `sm:`. No se pierde hover ni breakpoints.
+
+## `twIgnore`
+
+Envuelve strings que no deban tocarse:
+
+```tsx
+import {twIgnore} from "tailwindcss-atomic/runtime";
+
+<div className={twIgnore("flex hidden")} />
+```
+
+Añade más nombres con `preserveFunctions` si tu código usa otro helper.
+
+## Runtime `cn` / Tailwind Merge
+
+Si usas `tailwind-merge` en runtime, las clases hasheadas ya no parecen utilidades de Tailwind. Usa los helpers de `tailwindcss-atomic/runtime` para que el merge siga viendo los tokens originales cuando haga falta, o haz el merge **antes** del rewrite (en build).
+
+<Callout type="info">
+  La mayoría de apps no necesita runtime: el rewrite ocurre en el build. Usa `runtime` cuando los strings de clase se construyen después de que el bundle ya se transformó.
+</Callout>

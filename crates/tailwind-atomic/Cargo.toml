@@ -1,0 +1,15 @@
+[package]
+name = "tailwind-atomic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Atomic CSS compiler for Tailwind utilities"
+readme = "README.md"
+keywords = ["tailwind", "css", "atomic", "utilities"]
+categories = ["web-programming"]
+exclude = ["target"]
+
+[dependencies]
+lightningcss = { version = "1.0.0-alpha.58", default-features = false, features = ["visitor"] }

@@ -6,7 +6,7 @@
 
 Monorepo de **tailwindcss-atomic**: un plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
 
-El motor de hashing y atomicización vive en **Rust compilado a WebAssembly** (`src/`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
+El motor de hashing y atomicización vive en **Rust** (`crates/tailwind-atomic`), con bindings **WebAssembly** (`crates/tailwind-atomic-wasm`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
 
 ## Qué hace
 
@@ -29,7 +29,8 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 
 | Ruta | Contenido |
 | --- | --- |
-| `src/` | Crate Rust (`lightningcss` + `wasm-bindgen`): atomiciza CSS, reescribe class strings y HTML |
+| `crates/tailwind-atomic/` | Crate Rust puro (`lightningcss`): atomiciza CSS, reescribe class strings y HTML. Publicable en crates.io |
+| `crates/tailwind-atomic-wasm/` | Bindings `wasm-bindgen` que consume el crate anterior |
 | `packages/` | Paquete npm `tailwindcss-atomic` |
 | `app/next-app/` | Next.js 15 · App Router · Tailwind 4 |
 | `app/vite-app/` | Vite · React 18 · Tailwind 3 |
@@ -55,7 +56,7 @@ La guía de uso de la librería está en [`packages/README.md`](packages/README.
 pnpm install
 pnpm build          # WASM + JavaScript
 pnpm test           # Vitest (packages/__test__)
-pnpm test:rust      # cargo test (motor WASM)
+pnpm test:rust      # cargo test --workspace (crate + WASM bindings)
 pnpm test:coverage  # coverage lcov para Codecov
 pnpm dev            # Next 15 · http://localhost:3016
 pnpm dev:vite       # Vite · http://localhost:3017
@@ -74,7 +75,7 @@ pnpm build:wasm     # wasm-pack → packages/pkg
 pnpm build:js       # tsdown (ESM + CJS)
 ```
 
-Tras cambiar `src/lib.rs` hay que volver a `pnpm build:wasm` y reiniciar el servidor de desarrollo: el módulo WASM se carga al arrancar el proceso.
+Tras cambiar el crate Rust hay que volver a `pnpm build:wasm` y reiniciar el servidor de desarrollo: el módulo WASM se carga al arrancar el proceso.
 
 ## Licencia
 

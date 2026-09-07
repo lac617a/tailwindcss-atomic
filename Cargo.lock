@@ -525,13 +525,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tailwind-atomic"
+version = "0.1.0"
+dependencies = [
+ "lightningcss",
+]
+
+[[package]]
 name = "tailwind-atomic-wasm"
 version = "0.1.0"
 dependencies = [
  "getrandom",
- "lightningcss",
  "serde",
  "serde-wasm-bindgen",
+ "tailwind-atomic",
  "wasm-bindgen",
 ]
 

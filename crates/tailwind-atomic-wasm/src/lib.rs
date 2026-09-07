@@ -1,8 +1,3 @@
-mod atomic;
-mod classes;
-mod html;
-mod tailwind;
-
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -23,8 +18,8 @@ fn js_class_map(value: JsValue) -> std::collections::HashMap<String, String> {
 
 #[wasm_bindgen]
 pub fn process_tailwind_css(raw_css: &str) -> Result<JsValue, JsValue> {
-    let output =
-        atomic::atomicize_stylesheet(raw_css).map_err(|error| JsValue::from_str(&error))?;
+    let output = tailwind_atomic::atomicize_stylesheet(raw_css)
+        .map_err(|error| JsValue::from_str(&error))?;
 
     let result = AtomicResult {
         class_map: output.class_map,
@@ -38,10 +33,10 @@ pub fn process_tailwind_css(raw_css: &str) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn rewrite_class_string(class_str: &str, class_map: JsValue) -> String {
-    classes::rewrite_class_string(class_str, &js_class_map(class_map))
+    tailwind_atomic::rewrite_class_string(class_str, &js_class_map(class_map))
 }
 
 #[wasm_bindgen]
 pub fn rewrite_html_classes(html: &str, class_map: JsValue) -> String {
-    html::rewrite_html_classes(html, &js_class_map(class_map))
+    tailwind_atomic::rewrite_html_classes(html, &js_class_map(class_map))
 }

@@ -40,3 +40,8 @@ pub fn rewrite_class_string(class_str: &str, class_map: JsValue) -> String {
 pub fn rewrite_html_classes(html: &str, class_map: JsValue) -> String {
     tailwind_atomic::rewrite_html_classes(html, &js_class_map(class_map))
 }
+
+#[wasm_bindgen]
+pub fn looks_like_tailwind_utility(class_name: &str) -> bool {
+    tailwind_atomic::looks_like_tailwind_utility(class_name)
+}

@@ -8,6 +8,12 @@ const {
 	process_tailwind_css,
 	rewrite_class_string,
 	rewrite_html_classes,
+	looks_like_tailwind_utility,
 } = wasm;
 
-export {process_tailwind_css, rewrite_class_string, rewrite_html_classes};
+export {
+	process_tailwind_css,
+	rewrite_class_string,
+	rewrite_html_classes,
+	looks_like_tailwind_utility,
+};

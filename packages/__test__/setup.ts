@@ -8,6 +8,7 @@ import {
 	processTailwindCss,
 	wasmMock,
 } from "./helpers";
+import {looksLikeTailwindUtility} from "./tailwind-grammar";
 import {clearLinkedPackageCache} from "../shared/js";
 
 const packagesRoot = path.resolve(
@@ -18,6 +19,7 @@ const loaderStubPath = path.join(packagesRoot, "loader.cjs");
 
 vi.mock("../core/wasm", () => ({
 	process_tailwind_css: (css: string) => processTailwindCss(css),
+	looks_like_tailwind_utility: looksLikeTailwindUtility,
 }));
 
 if (!fs.existsSync(loaderStubPath)) {

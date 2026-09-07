@@ -23,7 +23,7 @@ let html = rewrite_html_classes(r#"<div class="flex p-4">"#, &out.class_map);
 - `css_rules` — only the hashed atomic rules
 - `changed` — whether anything was rewritten
 
-Custom classes that are not Tailwind-shaped (`.header-signin`, `.btn-notch`) and component `::before` / `::after` rules are left intact.
+Custom classes that are not Tailwind-shaped (`.header-signin`, `.btn-notch`) and component `::before` / `::after` rules are left intact. `looks_like_tailwind_utility` is the classifier the JS plugin uses so it does not keep a second copy of Tailwind prefixes.
 
 ## WASM / bundlers
 

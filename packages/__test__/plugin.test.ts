@@ -39,8 +39,12 @@ describe("plugin adapters", () => {
 		const plugin = factory() as {
 			resolveId?: (id: string) => string | undefined;
 			load?: (id: string) => string | undefined;
+			loadInclude?: (id: string) => boolean;
 		};
 		expect(plugin.resolveId?.("tailwindcss-atomic/runtime")).toBe(
+			"\0tailwind-atomic-runtime",
+		);
+		expect(plugin.resolveId?.("tailwindcss-atomic/runtime?v=1")).toBe(
 			"\0tailwind-atomic-runtime",
 		);
 		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
@@ -48,6 +52,23 @@ describe("plugin adapters", () => {
 		expect(source).toContain("atomicReconcile");
 		expect(source).toContain("_aaaaaa");
 		expect(source).not.toContain('from "tailwind-merge"');
+
+		const encoded = encodeURIComponent("\0tailwind-atomic-runtime");
+		const webpackId = `/tmp/app/_virtual_${encoded}`;
+		expect(plugin.loadInclude?.("\0tailwind-atomic-runtime")).toBe(true);
+		expect(plugin.loadInclude?.(webpackId)).toBe(true);
+		expect(plugin.loadInclude?.(`C:\\tmp\\app\\_virtual_${encoded}`)).toBe(
+			true,
+		);
+		expect(plugin.load?.(`D:/app/_virtual_${encoded}`)).toContain(
+			"atomicReconcile",
+		);
+
+		expect(plugin.loadInclude?.("messages/en.json")).toBe(false);
+		expect(plugin.loadInclude?.("/app/messages/en.json")).toBe(false);
+		expect(plugin.loadInclude?.("src/app.tsx")).toBe(false);
+		expect(plugin.loadInclude?.("")).toBe(false);
+		expect(plugin.loadInclude?.("node_modules/pkg/data.json")).toBe(false);
 	});
 });
 

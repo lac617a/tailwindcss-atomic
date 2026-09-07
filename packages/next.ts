@@ -15,74 +15,18 @@ import {
 	listAppDependencyNames,
 	readPackageName,
 } from "./shared/workspace";
-import {UnpluginFactoryOptions} from "./types";
+import {
+	AtomicNextConfig,
+	LegacyTurboRuleShorthand,
+	NextConfigFields,
+	NextWebpackOptions,
+	TurboRuleConfigCollection,
+	TurboRuleConfigItem,
+	TurbopackRuleCondition,
+	UnpluginFactoryOptions,
+} from "./types";
 
 const req = createRequire(import.meta.url);
-
-type NextWebpackOptions = {
-	dev: boolean;
-	[key: string]: unknown;
-};
-
-type TurbopackLoaderBuiltinCondition =
-	| "browser"
-	| "foreign"
-	| "development"
-	| "production"
-	| "node"
-	| "edge-light";
-
-type TurbopackRuleCondition =
-	| TurbopackLoaderBuiltinCondition
-	| {not: TurbopackRuleCondition}
-	| {all: TurbopackRuleCondition[]}
-	| {any: TurbopackRuleCondition[]};
-
-type TurboRuleConfigItem = {
-	loaders: string[];
-	as?: string;
-	condition?: TurbopackRuleCondition;
-};
-
-/** Next 16: `condition` selects when a rule runs. Arrays apply every match. */
-type TurboRuleConfigCollection =
-	| TurboRuleConfigItem
-	| TurboRuleConfigItem[];
-
-/** Next 15.2 and earlier: nested keys, not `condition`. */
-type LegacyTurboRuleShorthand = {
-	foreign?: TurboRuleConfigItem | false;
-	default?: TurboRuleConfigItem | false;
-};
-
-/** Fields we read from Next.js config. `T extends object` so Next's own types stay assignable. */
-type NextConfigFields = {
-	webpack?: ((...args: never[]) => unknown) | null;
-	transpilePackages?: string[];
-	outputFileTracingRoot?: string;
-	turbopack?: {
-		root?: string;
-		rules?: Record<string, unknown>;
-		resolveAlias?: Record<string, string | string[]>;
-	} | null;
-};
-
-type AtomicNextConfig<T> = Omit<
-	T,
-	"webpack" | "turbopack" | "transpilePackages" | "outputFileTracingRoot"
-> & {
-	transpilePackages: string[];
-	outputFileTracingRoot?: string;
-	turbopack: {
-		root: string;
-		rules: Record<string, TurboRuleConfigCollection>;
-		resolveAlias?: Record<string, string | string[]>;
-	};
-	webpack: (
-		config: Configuration,
-		options: NextWebpackOptions,
-	) => Configuration;
-};
 
 type AtomicNextOptions = Parameters<typeof webpackTailwindAtomic>[0] &
 	UnpluginFactoryOptions;
@@ -93,6 +37,19 @@ function resolveAtomicLoader() {
 	} catch {
 		return req.resolve("../dist/loader.cjs");
 	}
+}
+
+/** Internal Turbopack/virtual ids are not on the project filesystem. */
+const TURBOPACK_NOT_VIRTUAL: TurbopackRuleCondition = {
+	not: {
+		any: [{path: /\[turbopack/}, {path: /^\0/}, {path: /(?:^|[\\/])_virtual_/}],
+	},
+};
+
+function withTurboLoaderCondition(
+	scope: TurbopackRuleCondition,
+): TurbopackRuleCondition {
+	return {all: [scope, TURBOPACK_NOT_VIRTUAL]};
 }
 
 function turboLoaderRules(
@@ -108,6 +65,10 @@ function turboLoaderRules(
 	//
 	// Next 16.3 dropped the undocumented `{ foreign, default }` shorthand
 	// (vercel/next.js#83068). `foreign` is a condition, not a sibling key.
+	//
+	// Virtual modules (`[turbopack-ecmascript]/worker/...`, `\0`, `_virtual_`)
+	// match `*.ts` globs but are not on the project filesystem — the loader
+	// would throw "needs to be on project filesystem".
 	const withLoader: TurboRuleConfigItem = {
 		loaders: [atomicLoader],
 		as: "*",
@@ -116,8 +77,14 @@ function turboLoaderRules(
 		useLegacyTurboRuleShorthand(readInstalledNextVersion())
 			? {foreign: withLoader, default: withLoader}
 			: [
-					{...withLoader, condition: "foreign"},
-					{...withLoader, condition: {not: "foreign"}},
+					{
+						...withLoader,
+						condition: withTurboLoaderCondition("foreign"),
+					},
+					{
+						...withLoader,
+						condition: withTurboLoaderCondition({not: "foreign"}),
+					},
 				];
 
 	return {
@@ -225,8 +192,7 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 			webpackConfig.module.rules.unshift({
 				test: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
 				exclude: (resource: string) =>
-					!isAtomicRuntimeModule(resource) &&
-					shouldSkipJsTransform(resource),
+					!isAtomicRuntimeModule(resource) && shouldSkipJsTransform(resource),
 				enforce: "pre",
 				use: [{loader: atomicLoader}],
 			});

@@ -10,6 +10,9 @@ function createPlugin(options?: Parameters<typeof factory>[0]) {
 		transformInclude: (id: string) => boolean;
 		transform: (code: string, id: string) => Promise<{code: string} | null>;
 		buildStart: () => Promise<void>;
+		loadInclude: (id: string) => boolean;
+		load: (id: string) => string | undefined;
+		resolveId: (id: string) => string | undefined;
 		vite: {
 			configResolved: (config: {root?: string}) => void;
 			configureServer: (server: unknown) => void;
@@ -84,6 +87,16 @@ describe("factory plugin", () => {
 		const plugin = createPlugin();
 		expect(plugin.name).toBe("tailwind-atomic-plugin");
 		expect(plugin.enforce).toBe("post");
+	});
+
+	it("limits loadInclude to the virtual runtime so JSON keeps webpack's json type", () => {
+		const plugin = createPlugin();
+		expect(plugin.loadInclude("\0tailwind-atomic-runtime")).toBe(true);
+		expect(plugin.loadInclude("messages/en.json")).toBe(false);
+		expect(plugin.loadInclude("/app/messages/index.json")).toBe(false);
+		expect(plugin.resolveId("tailwindcss-atomic/runtime")).toBe(
+			"\0tailwind-atomic-runtime",
+		);
 	});
 
 	it("preloads a class map from tailwindCss", () => {
@@ -380,7 +393,8 @@ describe("factory webpack hook", () => {
 			},
 		});
 		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
-		expect(updated["main.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(updated["main.js"]).toBeUndefined();
+		expect(updated["buffer.js"]).toBeUndefined();
 		expect(updated["index.html"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 	});
 
@@ -459,10 +473,10 @@ describe("factory webpack hook", () => {
 		expect(updated["plain.css"]).toBeUndefined();
 		expect(updated["buffer.css"]).toContain("/*! tailwind-atomic */");
 		expect(updated["lib.mjs"]).toBeUndefined();
-		expect(updated["lib.cjs"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(updated["lib.cjs"]).toBeUndefined();
 	});
 
-	it("processes CSS before JS so a late class map still rewrites bundles", async () => {
+	it("processes CSS so the class map is ready for loader-transformed SSR JS", async () => {
 		ATOMIC_RUNTIME.classMap = Object.create(null);
 		ATOMIC_RUNTIME.classMap["__skip_warmup"] = "_skip";
 		const plugin = createPlugin();
@@ -510,15 +524,14 @@ describe("factory webpack hook", () => {
 			},
 		});
 
+		const serverJs =
+			`_jsx("div", { className: "flex py-2 px-4 mx-auto" })`;
 		await processAssets?.({
 			"app/page.js": {source: () => `cn("flex")`},
 			"static/chunks/app/layout.js": {
 				source: () => `_jsx("div", { className: "relative flex flex-col p-4" })`,
 			},
-			"server/app/page.js": {
-				source: () =>
-					`_jsx("div", { className: "flex py-2 px-4 mx-auto" })`,
-			},
+			"server/app/page.js": {source: () => serverJs},
 			"main.css": {
 				source: () =>
 					".flex { display: flex } .relative { position: relative } .flex-col { flex-direction: column } .p-4 { padding: 1rem } .py-2 { padding-top: .5rem; padding-bottom: .5rem } .px-4 { padding-left: 1rem; padding-right: 1rem } .mx-auto { margin-left: auto; margin-right: auto }",
@@ -530,24 +543,21 @@ describe("factory webpack hook", () => {
 		expect(ATOMIC_RUNTIME.classMap["py-2"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["px-4"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["mx-auto"]).toMatch(/^_[0-9a-f]{6}$/);
-		expect(updated["app/page.js"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
-		expect(updated["app/page.js"]).not.toContain("flex");
-		expect(updated["static/chunks/app/layout.js"]).toContain(
-			ATOMIC_RUNTIME.classMap["flex"],
+		expect(updated["app/page.js"]).toBeUndefined();
+		expect(updated["static/chunks/app/layout.js"]).toBeUndefined();
+		expect(updated["server/app/page.js"]).toBeUndefined();
+
+		const ssr = await transformAtomicSource(serverJs, "src/app/page.tsx");
+		expect(ssr.code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
+		expect(ssr.code).toContain(ATOMIC_RUNTIME.classMap["py-2"]);
+		expect(ssr.code).toContain(ATOMIC_RUNTIME.classMap["px-4"]);
+		expect(ssr.code).not.toMatch(/\b(flex|py-2|px-4|mx-auto)\b/);
+		expect(updated["main.css"]).toContain(
+			`.${ATOMIC_RUNTIME.classMap["flex"]}`,
 		);
-		expect(updated["static/chunks/app/layout.js"]).not.toMatch(
-			/\bflex-col\b/,
-		);
-		expect(updated["server/app/page.js"]).toContain(
-			ATOMIC_RUNTIME.classMap["py-2"],
-		);
-		expect(updated["server/app/page.js"]).toContain(
-			ATOMIC_RUNTIME.classMap["px-4"],
-		);
-		expect(updated["server/app/page.js"]).not.toMatch(/\b(py-2|px-4|mx-auto)\b/);
 	});
 
-	it("rehydrates an already-atomic CSS map before rewriting JS", async () => {
+	it("rehydrates an already-atomic CSS map for the loader without rewriting server JS assets", async () => {
 		const {code} = applyAtomicCss(".flex { display: flex }");
 		const hashed = ATOMIC_RUNTIME.classMap["flex"];
 		ATOMIC_RUNTIME.classMap = Object.create(null);
@@ -604,8 +614,135 @@ describe("factory webpack hook", () => {
 		});
 
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe(hashed);
-		expect(updated["server/app/page.js"]).toContain(hashed);
+		expect(updated["server/app/page.js"]).toBeUndefined();
 		expect(updated["app.css"]).toBeUndefined();
+
+		const ssr = await transformAtomicSource(
+			`_jsx("div", { className: "flex" })`,
+			"src/app/page.tsx",
+		);
+		expect(ssr.code).toContain(hashed);
+		expect(ssr.code).not.toMatch(/\bflex\b/);
+	});
+
+	it("rewrites emitted JS only when transformEmittedJs is on and output is ESM", async () => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const plugin = createPlugin({transformEmittedJs: true});
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string}>) => Promise<void>)
+			| undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		plugin.webpack({
+			context: "/tmp/app",
+			options: {output: {module: true}, target: "web"},
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							outputOptions: {module: true},
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		await processAssets?.({
+			"static/chunks/app.js": {source: () => `cn("flex")`},
+		});
+		expect(updated["static/chunks/app.js"]).toContain("_aaaaaa");
+		expect(updated["static/chunks/app.js"]).toContain(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime"`,
+		);
+	});
+
+	it("does not inject an ESM import into Next server CommonJS chunks", async () => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const plugin = createPlugin({transformEmittedJs: true});
+		const updated: Record<string, string> = {};
+		let processAssets:
+			| ((assets: Record<string, {source: () => string}>) => Promise<void>)
+			| undefined;
+
+		class RawSource {
+			constructor(public source: string) {}
+		}
+
+		const serverJs = `"use strict";\ncn("flex");\n`;
+		plugin.webpack({
+			context: "/tmp/app",
+			options: {
+				output: {library: {type: "commonjs2"}},
+				target: "node",
+			},
+			webpack: {
+				Compilation: {PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE: 400},
+				sources: {RawSource},
+				NormalModule: {
+					getCompilationHooks() {
+						return {loader: {tap() {}}};
+					},
+				},
+			},
+			hooks: {
+				beforeCompile: {tapPromise() {}},
+				compilation: {
+					tap(_name: string, fn: (compilation: unknown) => void) {
+						fn({
+							outputOptions: {library: {type: "commonjs2"}},
+							hooks: {
+								processAssets: {
+									tapPromise(
+										_opts: unknown,
+										cb: (assets: Record<string, {source: () => string}>) => Promise<void>,
+									) {
+										processAssets = cb;
+									},
+								},
+							},
+							updateAsset(fileName: string, source: RawSource) {
+								updated[fileName] = source.source;
+							},
+						});
+					},
+				},
+			},
+		});
+
+		await processAssets?.({
+			"server/chunks/5391.js": {source: () => serverJs},
+			"server/app/_not-found.js": {source: () => serverJs},
+		});
+		expect(updated["server/chunks/5391.js"]).toBeUndefined();
+		expect(updated["server/app/_not-found.js"]).toBeUndefined();
+		expect(serverJs).not.toContain("import { atomicReconcile");
 	});
 
 	it("does not atomicize webpack CSS assets that originate in node_modules", async () => {

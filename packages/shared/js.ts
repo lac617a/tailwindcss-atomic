@@ -249,19 +249,80 @@ function alreadyReconciled(path: NodePath) {
 	return getCalleeName(parent.node.callee) === RUNTIME_FN;
 }
 
-function hasRuntimeImport(ast: {program: {body: Node[]}}) {
-	return ast.program.body.some(
-		(node) =>
-			node.type === "ImportDeclaration" &&
-			node.source.value === VIRTUAL_RUNTIME_IMPORT,
-	);
+function isRuntimeModuleSource(value: unknown) {
+	return value === VIRTUAL_RUNTIME_IMPORT;
 }
 
-function injectRuntimeImport(ast: {
-	program: {body: Node[]; directives?: {value: {value: string}}[]};
-}) {
-	if (hasRuntimeImport(ast)) return;
-	const importDecl = t.importDeclaration(
+function isRequireRuntimeCall(node: Node | null | undefined) {
+	if (!node || node.type !== "CallExpression") return false;
+	if (node.callee.type !== "Identifier" || node.callee.name !== "require") {
+		return false;
+	}
+	const arg = node.arguments[0];
+	return arg?.type === "StringLiteral" && isRuntimeModuleSource(arg.value);
+}
+
+function hasRuntimeImport(ast: {program: {body: Node[]}}) {
+	return ast.program.body.some((node) => {
+		if (
+			node.type === "ImportDeclaration" &&
+			isRuntimeModuleSource(node.source.value)
+		) {
+			return true;
+		}
+		if (node.type === "VariableDeclaration") {
+			return node.declarations.some((decl) => isRequireRuntimeCall(decl.init));
+		}
+		return node.type === "ExpressionStatement" && isRequireRuntimeCall(node.expression);
+	});
+}
+
+function hasRuntimeFnBinding(ast: {program: {body: Node[]}}) {
+	return ast.program.body.some((node) => {
+		if (node.type === "ImportDeclaration") {
+			return node.specifiers.some((spec) => spec.local?.name === RUNTIME_FN);
+		}
+		if (node.type === "FunctionDeclaration") {
+			return node.id?.name === RUNTIME_FN;
+		}
+		if (node.type !== "VariableDeclaration") return false;
+		return node.declarations.some((decl) => {
+			if (decl.id.type === "Identifier") {
+				return decl.id.name === RUNTIME_FN;
+			}
+			if (decl.id.type !== "ObjectPattern") return false;
+			return decl.id.properties.some((prop) => {
+				if (prop.type !== "ObjectProperty") return false;
+				return (
+					prop.value.type === "Identifier" && prop.value.name === RUNTIME_FN
+				);
+			});
+		});
+	});
+}
+
+type RuntimeImportKind = "esm" | "cjs";
+
+function runtimeImportNode(kind: RuntimeImportKind) {
+	if (kind === "cjs") {
+		return t.variableDeclaration("const", [
+			t.variableDeclarator(
+				t.objectPattern([
+					t.objectProperty(
+						t.identifier("atomicReconcile"),
+						t.identifier(RUNTIME_FN),
+						false,
+						false,
+					),
+				]),
+				t.callExpression(t.identifier("require"), [
+					t.stringLiteral(VIRTUAL_RUNTIME_IMPORT),
+				]),
+			),
+		]);
+	}
+
+	return t.importDeclaration(
 		[
 			t.importSpecifier(
 				t.identifier(RUNTIME_FN),
@@ -270,13 +331,24 @@ function injectRuntimeImport(ast: {
 		],
 		t.stringLiteral(VIRTUAL_RUNTIME_IMPORT),
 	);
+}
+
+function injectRuntimeImport(
+	ast: {
+		program: {body: Node[]; directives?: {value: {value: string}}[]};
+	},
+	kind: RuntimeImportKind,
+) {
+	if (hasRuntimeImport(ast) || hasRuntimeFnBinding(ast)) return;
+	const importDecl = runtimeImportNode(kind);
 	const body = ast.program.body;
 	const first = body[0];
 	const afterDirective =
 		first?.type === "ExpressionStatement" &&
 		first.expression.type === "StringLiteral" &&
 		(first.expression.value === "use client" ||
-			first.expression.value === "use server");
+			first.expression.value === "use server" ||
+			first.expression.value === "use strict");
 	if (afterDirective) {
 		body.splice(1, 0, importDecl);
 	} else {
@@ -284,7 +356,15 @@ function injectRuntimeImport(ast: {
 	}
 }
 
-function transformJs(code: string, targetFunctions: Set<string>) {
+type TransformJsOptions = {
+	runtimeImport?: RuntimeImportKind | false;
+};
+
+function transformJs(
+	code: string,
+	targetFunctions: Set<string>,
+	options?: TransformJsOptions,
+) {
 	if (!code || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
 		return {code: null, map: null};
 	}
@@ -307,11 +387,14 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 				if (name !== "className" && name !== "class") return;
 
 				if (path.node.value && path.node.value.type === "StringLiteral") {
-					path.node.value.value = transformClassString(
+					const next = transformClassString(
 						path.node.value.value,
 						classMap,
 					);
-					hasModifications = true;
+					if (next !== path.node.value.value) {
+						path.node.value.value = next;
+						hasModifications = true;
+					}
 				}
 
 				if (
@@ -434,7 +517,8 @@ function transformJs(code: string, targetFunctions: Set<string>) {
 
 		if (!hasModifications) return {code: null, map: null};
 
-		if (needsRuntime) injectRuntimeImport(ast);
+		const runtimeImport = options?.runtimeImport ?? "esm";
+		if (needsRuntime && runtimeImport) injectRuntimeImport(ast, runtimeImport);
 
 		const output = generate(ast, {}, code);
 
@@ -454,3 +538,5 @@ export {
 	shouldSkipJsTransform,
 	clearLinkedPackageCache,
 };
+
+export type {TransformJsOptions};

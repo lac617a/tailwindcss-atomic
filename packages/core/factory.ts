@@ -31,6 +31,7 @@ import {
 import {
 	generateRuntimeModule,
 	isAtomicRuntimeModule,
+	isVirtualRuntimeLoadId,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
 } from "../shared/virtual-runtime";
@@ -96,6 +97,68 @@ function assetText(asset: {source: () => string | {toString(): string}}) {
 
 function isJsAssetName(fileName: string) {
 	return /\.[cm]?js$/.test(fileName);
+}
+
+function outputLibraryType(output: {
+	library?: {type?: string} | string;
+	libraryTarget?: string;
+}) {
+	const library = output.library;
+	if (typeof library === "string") return library;
+	if (library && typeof library === "object" && typeof library.type === "string") {
+		return library.type;
+	}
+	if (typeof output.libraryTarget === "string") return output.libraryTarget;
+	return undefined;
+}
+
+function isNodeLikeTarget(target: unknown) {
+	const targets = Array.isArray(target) ? target : target == null ? [] : [target];
+	return targets.some(
+		(item) =>
+			item === "node" ||
+			item === "async-node" ||
+			(typeof item === "string" &&
+				(item.startsWith("node") || item.startsWith("async-node"))),
+	);
+}
+
+/**
+ * Webpack's default output is a script/CJS bundle, not ESM. Next's server
+ * compiler uses `library.type = "commonjs2"` and `target: "node"`. Injecting a
+ * bare `import` into those assets is a SyntaxError at "Collecting page data".
+ */
+function webpackEmitsEsm(
+	compilation: {
+		outputOptions?: {
+			module?: boolean;
+			library?: {type?: string} | string;
+			libraryTarget?: string;
+		};
+	},
+	compiler: {
+		options?: {
+			output?: {
+				module?: boolean;
+				library?: {type?: string} | string;
+				libraryTarget?: string;
+			};
+			target?: unknown;
+		};
+	},
+) {
+	const output = {
+		...(compiler.options?.output ?? {}),
+		...(compilation.outputOptions ?? {}),
+	};
+
+	if (output.module === true) return true;
+
+	const libraryType = outputLibraryType(output)?.toLowerCase();
+	if (libraryType === "module" || libraryType === "modern-module") return true;
+	if (libraryType) return false;
+	if (isNodeLikeTarget(compiler.options?.target)) return false;
+	return false;
 }
 
 function cssModuleResource(module: WebpackCssModule) {
@@ -166,6 +229,8 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 		ATOMIC_RUNTIME.cssEntries.push(...options.cssEntries);
 	}
 
+	const transformEmittedJs = options.transformEmittedJs === true;
+
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.
 	if (options.tailwindCss) {
 		const {class_map} = process_tailwind_css(options.tailwindCss);
@@ -185,13 +250,18 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 		enforce: "post",
 
 		resolveId(id: string) {
-			if (id === VIRTUAL_RUNTIME_IMPORT || id === VIRTUAL_RUNTIME_RESOLVED) {
+			const clean = String(id).split("?")[0] ?? id;
+			if (clean === VIRTUAL_RUNTIME_IMPORT || clean === VIRTUAL_RUNTIME_RESOLVED) {
 				return VIRTUAL_RUNTIME_RESOLVED;
 			}
 		},
 
+		loadInclude(id: string) {
+			return isVirtualRuntimeLoadId(id);
+		},
+
 		load(id: string) {
-			if (id === VIRTUAL_RUNTIME_RESOLVED) {
+			if (isVirtualRuntimeLoadId(id)) {
 				return generateRuntimeModule();
 			}
 		},
@@ -363,16 +433,22 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 							await warmupClassMapFromCss();
 
 							const vendorOnlyCss = collectVendorOnlyCssAssets(compilation);
+							const rewriteEmittedJs =
+								transformEmittedJs && webpackEmitsEsm(compilation, compiler);
 
 							// CSS first so the class map is complete (and rehydrated
-							// from already-atomic chunks) before any SSR/RSC JS rewrite.
+							// from already-atomic chunks) before any optional JS rewrite.
+							// Source JS is transformed by the loader; rewriting emitted
+							// JS is opt-in and skipped for CommonJS/Node output.
 							const cssFiles: string[] = [];
 							const htmlFiles: string[] = [];
 							const jsFiles: string[] = [];
 							for (const fileName of Object.keys(assets)) {
 								if (fileName.endsWith(".css")) cssFiles.push(fileName);
 								else if (fileName.endsWith(".html")) htmlFiles.push(fileName);
-								else if (isJsAssetName(fileName)) jsFiles.push(fileName);
+								else if (rewriteEmittedJs && isJsAssetName(fileName)) {
+									jsFiles.push(fileName);
+								}
 							}
 
 							for (const fileName of cssFiles) {

@@ -55,6 +55,12 @@ describe("processArgument", () => {
 		expect(rewrite(`"flex p-6"`)).toContain("_aaaaaa _bbbbbb");
 	});
 
+	it("returns false when a string is already atomic", () => {
+		const ast = parse(`("_aaaaaa")`, {sourceType: "module"});
+		const stmt = ast.program.body[0] as ExpressionStatement;
+		expect(processArgument(stmt.expression, classMap)).toBe(false);
+	});
+
 	it("rewrites template interpolations (ternaries inside className templates)", () => {
 		expect(
 			rewrite(

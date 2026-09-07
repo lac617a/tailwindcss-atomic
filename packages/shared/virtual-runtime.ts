@@ -9,12 +9,53 @@ const VIRTUAL_RUNTIME_IMPORT = "tailwindcss-atomic/runtime";
 const VIRTUAL_RUNTIME_RESOLVED = "\0tailwind-atomic-runtime";
 const RUNTIME_FN = "_twAtomicReconcile";
 
+function posixId(id: string) {
+	return String(id).split("?")[0]?.replace(/\\/g, "/") ?? "";
+}
+
+function decodeUriComponentSafe(value: string) {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
+/**
+ * Ids that `load` / `loadInclude` may serve. Webpack/Rspack encode `\0` virtual
+ * modules as `path.resolve(context, "_virtual_") + encodeURIComponent(id)`.
+ */
+function isVirtualRuntimeLoadId(id: string) {
+	const clean = posixId(id);
+	if (!clean) return false;
+	if (clean === VIRTUAL_RUNTIME_RESOLVED) return true;
+
+	const encoded = encodeURIComponent(VIRTUAL_RUNTIME_RESOLVED);
+	if (
+		clean.endsWith(`_virtual_${encoded}`) ||
+		clean.endsWith(`_virtual_${VIRTUAL_RUNTIME_RESOLVED}`)
+	) {
+		return true;
+	}
+
+	const base = clean.split("/").pop() ?? clean;
+	const decodedBase = decodeUriComponentSafe(base);
+	const isRuntimeName =
+		decodedBase === VIRTUAL_RUNTIME_RESOLVED ||
+		base === encoded ||
+		base === "tailwind-atomic-runtime";
+	if (!isRuntimeName) return false;
+
+	return clean.includes("_virtual_") || clean.includes("__virtual__");
+}
+
 function isAtomicRuntimeModule(id: string) {
-	const clean = String(id).split("?")[0]?.replace(/\\/g, "/") ?? "";
+	const clean = posixId(id);
 	if (!clean) return false;
 	if (clean === VIRTUAL_RUNTIME_IMPORT || clean === VIRTUAL_RUNTIME_RESOLVED) {
 		return true;
 	}
+	if (isVirtualRuntimeLoadId(id)) return true;
 	if (clean.includes("tailwind-atomic-runtime")) return true;
 	return /(?:^|\/)atomic-runtime\.(mjs|cjs|js|mts|cts|ts)$/.test(clean);
 }
@@ -146,5 +187,6 @@ export {
 	RUNTIME_FN,
 	generateRuntimeModule,
 	isAtomicRuntimeModule,
+	isVirtualRuntimeLoadId,
 	projectHasTwMerge,
 };

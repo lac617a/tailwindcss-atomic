@@ -298,6 +298,48 @@ describe("transformJs", () => {
 			map: null,
 		});
 	});
+
+	it("is idempotent and does not inject a second runtime import", () => {
+		const once = transformJs(`cn("flex");`, new Set(["cn"]));
+		expect(once.code).toContain(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime"`,
+		);
+		expect(once.code).toContain("_twAtomicReconcile(cn(");
+
+		const twice = transformJs(once.code ?? "", new Set(["cn"]));
+		expect(twice.code).toBeNull();
+
+		const already = transformJs(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";\ncn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(already.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+		expect(already.code).not.toMatch(
+			/_twAtomicReconcile\(\s*_twAtomicReconcile/,
+		);
+	});
+
+	it("injects require() when asked for CJS runtime imports", () => {
+		const result = transformJs(`cn("flex");`, new Set(["cn"]), {
+			runtimeImport: "cjs",
+		});
+		expect(result.code).toMatch(
+			/require\(["']tailwindcss-atomic\/runtime["']\)/,
+		);
+		expect(result.code).toContain("_twAtomicReconcile");
+		expect(result.code).not.toMatch(
+			/import\s*\{[^}]*atomicReconcile[^}]*\}\s*from\s*["']tailwindcss-atomic\/runtime["']/,
+		);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+	});
+
+	it("does not inject a runtime import when wrapping is skipped", () => {
+		const result = transformJs(`cn("flex");`, new Set(["cn"]), {
+			runtimeImport: false,
+		});
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+	});
 });
 
 describe("invalidateJsModules", () => {

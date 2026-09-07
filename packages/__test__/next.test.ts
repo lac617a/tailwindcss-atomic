@@ -20,9 +20,19 @@ const loaderRule = {
 	as: "*",
 };
 
+const turbopackNotVirtual = {
+	not: {
+		any: [
+			{path: /\[turbopack/},
+			{path: /^\0/},
+			{path: /(?:^|[\\/])_virtual_/},
+		],
+	},
+};
+
 const appAndWorkspaceRules = [
-	{...loaderRule, condition: "foreign"},
-	{...loaderRule, condition: {not: "foreign"}},
+	{...loaderRule, condition: {all: ["foreign", turbopackNotVirtual]}},
+	{...loaderRule, condition: {all: [{not: "foreign"}, turbopackNotVirtual]}},
 ];
 
 function expectModernTurboRules(rules: Record<string, unknown>) {
@@ -44,6 +54,20 @@ describe("withTailwindAtomic", () => {
 		expectModernTurboRules(rules);
 		expect(config.turbopack?.root).toBeTruthy();
 		expect(config.outputFileTracingRoot).toBe(config.turbopack?.root);
+	});
+
+	it("excludes Turbopack virtual worker modules from loader rules", () => {
+		const virtual =
+			"[turbopack-ecmascript]/worker/browser/createWorker.ts";
+		const appFile = "[project]/src/shared/worker/timer-stats.worker.ts";
+		expect(/\[turbopack/.test(virtual)).toBe(true);
+		expect(/\[turbopack/.test(appFile)).toBe(false);
+		expect(/^\0/.test("\0tailwind-atomic-runtime")).toBe(true);
+		expect(/(?:^|[\\/])_virtual_/.test("/tmp/app/_virtual_%00x")).toBe(true);
+
+		readInstalledNextVersion.mockReturnValue("16.3.0");
+		const config = withTailwindAtomic();
+		expectModernTurboRules(config.turbopack?.rules ?? {});
 	});
 
 	it("uses condition arrays on Next 16+ instead of nested foreign/default keys", () => {

@@ -65,18 +65,27 @@ function processObjectExpression(
 	classMap: Record<string, string>,
 	rewriteKeys: boolean,
 ) {
+	if (!rewriteKeys) return false;
+	let changed = false;
 	objectExpression.properties.forEach((property) => {
-		if (property.type !== "ObjectProperty" || !rewriteKeys) return;
+		if (property.type !== "ObjectProperty") return;
 
 		if (property.key.type === "StringLiteral") {
-			property.key.value = transformClassString(property.key.value, classMap);
-			modified = true;
+			const next = transformClassString(property.key.value, classMap);
+			if (next !== property.key.value) {
+				property.key.value = next;
+				changed = true;
+			}
 		} else if (property.key.type === "Identifier" && !property.computed) {
-			property.key.name = transformClassString(property.key.name, classMap);
-			modified = true;
+			const next = transformClassString(property.key.name, classMap);
+			if (next !== property.key.name) {
+				property.key.name = next;
+				changed = true;
+			}
 		}
 	});
-	return modified;
+	if (changed) modified = true;
+	return changed;
 }
 
 function processClassValue(
@@ -86,16 +95,22 @@ function processClassValue(
 	if (!argNode) return false;
 
 	switch (argNode.type) {
-		case "StringLiteral":
-			argNode.value = transformClassString(argNode.value, classMap);
+		case "StringLiteral": {
+			const next = transformClassString(argNode.value, classMap);
+			if (next === argNode.value) return false;
+			argNode.value = next;
 			return true;
+		}
 		case "TemplateLiteral":
 			return processTemplateLiteral(argNode, classMap);
-		case "ArrayExpression":
+		case "ArrayExpression": {
+			let changed = false;
 			argNode.elements.forEach((el) => {
-				if (processClassValue(el, classMap)) modified = true;
+				if (processClassValue(el, classMap)) changed = true;
 			});
-			return modified;
+			if (changed) modified = true;
+			return changed;
+		}
 		case "ConditionalExpression": {
 			const altMod = processClassValue(argNode.alternate, classMap);
 			const consMod = processClassValue(argNode.consequent, classMap);
@@ -198,18 +213,24 @@ export function processArgument(
 	if (!argNode) return false;
 
 	switch (argNode.type) {
-		case "StringLiteral":
-			argNode.value = transformClassString(argNode.value, classMap);
+		case "StringLiteral": {
+			const next = transformClassString(argNode.value, classMap);
+			if (next === argNode.value) return false;
+			argNode.value = next;
 			return true;
+		}
 		case "TemplateLiteral":
 			return processTemplateLiteral(argNode, classMap);
 		case "ObjectExpression":
 			return processObjectExpression(argNode, classMap, rewriteObjectKeys);
-		case "ArrayExpression":
+		case "ArrayExpression": {
+			let changed = false;
 			argNode.elements.forEach((el) => {
-				if (processArgument(el, classMap, rewriteObjectKeys)) modified = true;
+				if (processArgument(el, classMap, rewriteObjectKeys)) changed = true;
 			});
-			return modified;
+			if (changed) modified = true;
+			return changed;
+		}
 		case "ConditionalExpression": {
 			const altMod = processArgument(
 				argNode.alternate,

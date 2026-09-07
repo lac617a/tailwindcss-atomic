@@ -648,6 +648,20 @@ function posixCssPath(from: string) {
 
 const NODE_MODULES_PATH_RE = /(?:^|\/)node_modules(?:\/|$)/;
 
+const CSS_MODULE_PATH_RE = /\.module\.(css|scss|sass|less|styl|pcss|postcss)$/;
+
+/**
+ * PostCSS corre antes de que css-loader/Turbopack renombre los locals, así que
+ * `.svg` o `.body` todavía parecen utilidades sueltas. Atomizarlas borra la
+ * regla original y el local desaparece del mapa de exports: `styles.svg` queda
+ * `undefined` y el elemento se renderiza sin clase.
+ */
+function isCssModuleFile(from?: string | null) {
+	if (!from) return false;
+	const clean = posixCssPath(from);
+	return Boolean(clean) && CSS_MODULE_PATH_RE.test(clean);
+}
+
 function matchesIgnoreCssPattern(clean: string, original: string, pattern: string | RegExp) {
 	if (typeof pattern === "string") {
 		const needle = pattern.replace(/\\/g, "/");
@@ -666,6 +680,7 @@ function shouldIgnoreCss(from?: string | null) {
 	const clean = posixCssPath(from);
 	if (!clean) return false;
 	if (NODE_MODULES_PATH_RE.test(clean)) return true;
+	if (CSS_MODULE_PATH_RE.test(clean)) return true;
 	for (const pattern of ATOMIC_RUNTIME.ignoreCss) {
 		if (matchesIgnoreCssPattern(clean, from, pattern)) return true;
 	}
@@ -783,8 +798,7 @@ function isCssFile(id: string) {
 
 	if (!cleanId) return false;
 
-	if (/\.module\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId))
-		return false;
+	if (CSS_MODULE_PATH_RE.test(cleanId)) return false;
 
 	return /\.(css|scss|sass|less|styl|pcss|postcss)$/.test(cleanId);
 }
@@ -1086,6 +1100,7 @@ async function warmupClassMapFromCss() {
 
 export {
 	isCssFile,
+	isCssModuleFile,
 	isViteCssJsWrapper,
 	asPostcssPlugin,
 	compileTailwindV4Css,

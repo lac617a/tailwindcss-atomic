@@ -13,6 +13,17 @@ const SLICK_CSS = `
 .slick-dots { position: absolute; bottom: 0; list-style: none; }
 `;
 
+/** Locals as PostCSS sees them: css-loader has not renamed them to `nexi_svg__hash` yet. */
+const NEXI_MODULE_CSS = `
+.svg { display: block; width: 100% }
+.plate { fill: none }
+.body { fill: #fff; stroke: #000 }
+.eyeLine { fill: none; stroke-width: 4 }
+.tongue { fill: var(--c-red) }
+.fx { pointer-events: none }
+.figure .limbs rect { fill: var(--c-red) }
+`;
+
 describe("postcss plugin", () => {
 	it("declares itself as a PostCSS plugin", () => {
 		expect(postcssTailwindAtomic.postcss).toBe(true);
@@ -79,5 +90,25 @@ describe("postcss plugin", () => {
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(app.css).not.toContain(".flex {");
+	});
+
+	it("does not atomicize CSS modules before the locals are hashed", async () => {
+		const result = await postcss([postcssTailwindAtomic()]).process(
+			NEXI_MODULE_CSS,
+			{from: "D:\\repo\\app\\components\\nexi.module.css"},
+		);
+
+		for (const local of ["svg", "body", "eyeLine", "fx", "plate"]) {
+			expect(result.css).toContain(`.${local} `);
+			expect(ATOMIC_RUNTIME.classMap[local]).toBeUndefined();
+		}
+		expect(result.css).not.toContain("/*! tailwind-atomic */");
+		expect(result.css).not.toMatch(/\._[0-9a-f]{6}/);
+
+		const scss = await postcss([postcssTailwindAtomic()]).process(
+			NEXI_MODULE_CSS,
+			{from: "/repo/app/components/nexi.module.scss?raw"},
+		);
+		expect(scss.css).toContain(".tongue ");
 	});
 });

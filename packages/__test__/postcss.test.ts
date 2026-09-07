@@ -92,23 +92,28 @@ describe("postcss plugin", () => {
 		expect(app.css).not.toContain(".flex {");
 	});
 
-	it("does not atomicize CSS modules before the locals are hashed", async () => {
+	it("atomicizes Tailwind utilities inside CSS modules without eating locals", async () => {
 		const result = await postcss([postcssTailwindAtomic()]).process(
-			NEXI_MODULE_CSS,
+			`${NEXI_MODULE_CSS}\n.flex { display: flex }\n.p-4 { padding: 1rem }\n`,
 			{from: "D:\\repo\\app\\components\\nexi.module.css"},
 		);
 
-		for (const local of ["svg", "body", "eyeLine", "fx", "plate"]) {
+		for (const local of ["svg", "body", "eyeLine", "fx", "plate", "tongue"]) {
 			expect(result.css).toContain(`.${local} `);
 			expect(ATOMIC_RUNTIME.classMap[local]).toBeUndefined();
 		}
-		expect(result.css).not.toContain("/*! tailwind-atomic */");
-		expect(result.css).not.toMatch(/\._[0-9a-f]{6}/);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(result.css).toContain("/*! tailwind-atomic */");
+		expect(result.css).not.toContain(".flex {");
+		expect(result.css).not.toContain(".p-4 {");
 
-		const scss = await postcss([postcssTailwindAtomic()]).process(
+		const localsOnly = await postcss([postcssTailwindAtomic()]).process(
 			NEXI_MODULE_CSS,
 			{from: "/repo/app/components/nexi.module.scss?raw"},
 		);
-		expect(scss.css).toContain(".tongue ");
+		expect(localsOnly.css).toContain(".tongue ");
+		expect(localsOnly.css).toContain(".svg ");
+		expect(localsOnly.css).not.toContain("/*! tailwind-atomic */");
 	});
 });

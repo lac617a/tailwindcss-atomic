@@ -492,21 +492,94 @@ function countUnescapedClasses(selector: string) {
 }
 
 /**
+ * Bare Tailwind utilities (no hyphen). Hyphenated names (`p-4`, `items-center`)
+ * and variants (`hover:flex`) are detected separately.
+ */
+const BARE_TAILWIND_UTILITIES = new Set([
+	"absolute",
+	"antialiased",
+	"block",
+	"blur",
+	"border",
+	"capitalize",
+	"collapse",
+	"container",
+	"contents",
+	"filter",
+	"fixed",
+	"flex",
+	"grayscale",
+	"grid",
+	"group",
+	"grow",
+	"hidden",
+	"inline",
+	"invert",
+	"invisible",
+	"isolate",
+	"italic",
+	"lowercase",
+	"ordinal",
+	"outline",
+	"overline",
+	"peer",
+	"prose",
+	"relative",
+	"resize",
+	"ring",
+	"sepia",
+	"shadow",
+	"shrink",
+	"static",
+	"sticky",
+	"table",
+	"transform",
+	"transition",
+	"truncate",
+	"underline",
+	"uppercase",
+	"visible",
+]);
+
+/**
  * css-loader / Vite / Next default localIdent: `File_local__hash`.
  * Arbitrary Tailwind values can contain `__` inside `[]`; those stay utilities.
  */
-function looksLikeCssModuleClass(className: string) {
+function looksLikeHashedCssModuleClass(className: string) {
 	const name = unescapeCssClassName(className);
 	if (!name.includes("__")) return false;
 	if (name.includes("[") || name.includes(":")) return false;
 	return true;
 }
 
+function looksLikeTailwindUtilityClass(className: string) {
+	const name = unescapeCssClassName(className);
+	if (!name) return false;
+	if (looksLikeHashedCssModuleClass(name)) return false;
+	if (/[:![\]/]/.test(name)) return true;
+	if (name.includes("-")) return true;
+	return BARE_TAILWIND_UTILITIES.has(name);
+}
+
+function looksLikeCssModuleClass(
+	className: string,
+	protectUnhashedLocals = false,
+) {
+	if (looksLikeHashedCssModuleClass(className)) return true;
+	if (protectUnhashedLocals && !looksLikeTailwindUtilityClass(className)) {
+		return true;
+	}
+	return false;
+}
+
 function firstClassToken(selector: string) {
 	return selector.match(/(?<!\\)\.((?:\\.|[^\s.:#[\]>+~,])+)/)?.[1];
 }
 
-function isSingleUtilitySelector(selector: string) {
+function isSingleUtilitySelector(
+	selector: string,
+	protectUnhashedLocals = false,
+) {
 	const sel = selector.trim();
 	if (!sel.includes(".")) return false;
 
@@ -521,15 +594,19 @@ function isSingleUtilitySelector(selector: string) {
 	}
 
 	const token = firstClassToken(sel);
-	if (token && looksLikeCssModuleClass(token)) return false;
+	if (token && looksLikeCssModuleClass(token, protectUnhashedLocals)) {
+		return false;
+	}
 
 	return true;
 }
 
-function isUtilitySelector(selector: string) {
+function isUtilitySelector(selector: string, protectUnhashedLocals = false) {
 	const parts = postcss.list.comma(selector).map((part) => part.trim());
 	if (!parts.length) return false;
-	return parts.every(isSingleUtilitySelector);
+	return parts.every((part) =>
+		isSingleUtilitySelector(part, protectUnhashedLocals),
+	);
 }
 
 /**
@@ -538,12 +615,15 @@ function isUtilitySelector(selector: string) {
  * (`.a .b`, `.pattern-background::before`) ni `:root` / `html` / `[data-theme]`.
  * Multi-decl (`py-2`, `px-4`, `mx-auto`) SÍ son utilidades; no usar decls.length.
  */
-function isUtilityRule(node: ChildNode): node is PostcssRule {
+function isUtilityRule(
+	node: ChildNode,
+	protectUnhashedLocals = false,
+): node is PostcssRule {
 	if (node.type !== "rule") return false;
 	if (!String(node.selector).includes(".")) return false;
 	if (hasThemeCustomProperties(node)) return false;
 	if (hasNestedChildRules(node)) return false;
-	if (!isUtilitySelector(node.selector)) return false;
+	if (!isUtilitySelector(node.selector, protectUnhashedLocals)) return false;
 	return true;
 }
 
@@ -551,10 +631,15 @@ function isHashedAtomicSelector(selector: string) {
 	return /(?:^|[\s,+>~])\._[0-9a-f]{6}\b/i.test(selector);
 }
 
-function atomicizeUtilityNodes(container: PostcssRoot) {
+function atomicizeUtilityNodes(
+	container: PostcssRoot,
+	protectUnhashedLocals = false,
+) {
 	if (!container.nodes) return false;
 
-	const utilityNodes = container.nodes.filter(isUtilityRule);
+	const utilityNodes = container.nodes.filter((node) =>
+		isUtilityRule(node, protectUnhashedLocals),
+	);
 	if (!utilityNodes.length) return false;
 
 	const utilityCss = utilityNodes.map((node) => node.toString()).join("\n");
@@ -578,14 +663,24 @@ function atomicizeUtilityNodes(container: PostcssRoot) {
 	return true;
 }
 
-function atomicizeContainer(container: PostcssRoot) {
+function atomicizeContainer(
+	container: PostcssRoot,
+	protectUnhashedLocals = false,
+) {
 	if (!container.nodes) return false;
 
-	let mapChanged = atomicizeUtilityNodes(container);
+	let mapChanged = atomicizeUtilityNodes(container, protectUnhashedLocals);
 
 	for (const node of [...container.nodes]) {
 		if (node.type === "atrule" && NESTED_AT_RULES.has(node.name)) {
-			if (atomicizeContainer(node as unknown as PostcssRoot)) mapChanged = true;
+			if (
+				atomicizeContainer(
+					node as unknown as PostcssRoot,
+					protectUnhashedLocals,
+				)
+			) {
+				mapChanged = true;
+			}
 		}
 	}
 
@@ -651,10 +746,10 @@ const NODE_MODULES_PATH_RE = /(?:^|\/)node_modules(?:\/|$)/;
 const CSS_MODULE_PATH_RE = /\.module\.(css|scss|sass|less|styl|pcss|postcss)$/;
 
 /**
- * PostCSS corre antes de que css-loader/Turbopack renombre los locals, así que
- * `.svg` o `.body` todavía parecen utilidades sueltas. Atomizarlas borra la
- * regla original y el local desaparece del mapa de exports: `styles.svg` queda
- * `undefined` y el elemento se renderiza sin clase.
+ * PostCSS corre antes de que css-loader/Turbopack renombre los locals.
+ * No se ignora el archivo (puede traer utilidades Tailwind); sí se protegen
+ * los nombres que no parecen utilidad (`.svg`, `.eyeLine`) para no romper
+ * `styles.svg`.
  */
 function isCssModuleFile(from?: string | null) {
 	if (!from) return false;
@@ -680,7 +775,6 @@ function shouldIgnoreCss(from?: string | null) {
 	const clean = posixCssPath(from);
 	if (!clean) return false;
 	if (NODE_MODULES_PATH_RE.test(clean)) return true;
-	if (CSS_MODULE_PATH_RE.test(clean)) return true;
 	for (const pattern of ATOMIC_RUNTIME.ignoreCss) {
 		if (matchesIgnoreCssPattern(clean, from, pattern)) return true;
 	}
@@ -750,32 +844,38 @@ function applyAtomicCss(css: string, from?: string) {
 
 	try {
 		const prev = {...ATOMIC_RUNTIME.classMap};
-		const wasmResult = process_tailwind_css(css) as {
-			class_map?: Record<string, string>;
-			css_rules?: unknown;
-			css?: string;
-			changed?: boolean;
-		};
+		const protectUnhashedLocals = isCssModuleFile(from);
 
-		if (typeof wasmResult?.css === "string") {
-			if (!wasmResult.changed && !wasmResult.css.trim()) {
-				return {code: css, changed: false};
-			}
-			const mapChanged = mergeClassMap(wasmResult.class_map ?? {});
-			if (!wasmResult.changed && !mapChanged) {
-				return {code: css, changed: false, mapChanged};
-			}
-			if (mapChanged) persistClassMap();
-			return {
-				code: formatAtomicCss(wasmResult.css),
-				changed: true,
-				mapChanged: classMapChangedSince(prev) || mapChanged,
+		// WASM treats `.svg` / `.body` as utilities. In a CSS module those are
+		// still unhashed locals, so filter in JS and only send Tailwind-looking rules.
+		if (!protectUnhashedLocals) {
+			const wasmResult = process_tailwind_css(css) as {
+				class_map?: Record<string, string>;
+				css_rules?: unknown;
+				css?: string;
+				changed?: boolean;
 			};
+
+			if (typeof wasmResult?.css === "string") {
+				if (!wasmResult.changed && !wasmResult.css.trim()) {
+					return {code: css, changed: false};
+				}
+				const mapChanged = mergeClassMap(wasmResult.class_map ?? {});
+				if (!wasmResult.changed && !mapChanged) {
+					return {code: css, changed: false, mapChanged};
+				}
+				if (mapChanged) persistClassMap();
+				return {
+					code: formatAtomicCss(wasmResult.css),
+					changed: true,
+					mapChanged: classMapChangedSince(prev) || mapChanged,
+				};
+			}
 		}
 
 		const root = postcss.parse(css);
 		flattenLayerAtRules(root);
-		const changed = atomicizeContainer(root);
+		const changed = atomicizeContainer(root, protectUnhashedLocals);
 		if (!changed) {
 			return {code: css, changed: false};
 		}

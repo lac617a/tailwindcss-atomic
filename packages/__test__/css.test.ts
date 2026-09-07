@@ -478,6 +478,31 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(code).not.toContain(".flex {");
 	});
 
+	it("keeps unhashed CSS module locals and still atomicizes Tailwind in that file", () => {
+		const css = `
+.svg { display: block; width: 100% }
+.body { fill: #fff; stroke: #000 }
+.eyeLine { fill: none; stroke-width: 4 }
+.flex { display: flex }
+.p-4 { padding: 1rem }
+`;
+		const {code, changed} = applyAtomicCss(
+			css,
+			"app/components/nexi.module.css",
+		);
+		expect(changed).toBe(true);
+		expect(code).toContain(".svg ");
+		expect(code).toContain(".body ");
+		expect(code).toContain(".eyeLine ");
+		expect(ATOMIC_RUNTIME.classMap["svg"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["body"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["eyeLine"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".flex ");
+		expect(code).not.toContain(".p-4 ");
+	});
+
 	it("leaves vendor slick CSS untouched when from is node_modules", () => {
 		const slick = `
 .slick-slider { position: relative; display: block; }

@@ -686,6 +686,35 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(code).not.toContain(".flex {");
 	});
 
+	it("atomicizes data-attribute variants and rewrites the class string", () => {
+		const {code, changed} = applyAtomicCss(`
+.data-\\[active\\=true\\]\\:font-medium[data-active=true] {
+  --tw-font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-medium);
+}
+.data-\\[state\\=open\\]\\:flex[data-state=open] { display: flex }
+.flex { display: flex }
+`);
+		expect(changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["data-[active=true]:font-medium"]).toMatch(
+			/^_[0-9a-f]{6}/,
+		);
+		expect(ATOMIC_RUNTIME.classMap["data-[state=open]:flex"]).toMatch(
+			/^_[0-9a-f]{6}/,
+		);
+		expect(code).toMatch(/\._[0-9a-f]{6}\[data-active=true\]/);
+		expect(code).toMatch(/\._[0-9a-f]{6}\[data-state=open\]/);
+		expect(code).not.toContain(".data-\\[active");
+		const rewritten = transformClassString(
+			"flex data-[active=true]:font-medium data-[state=open]:flex",
+			ATOMIC_RUNTIME.classMap,
+		);
+		expect(rewritten).toContain(
+			ATOMIC_RUNTIME.classMap["data-[active=true]:font-medium"],
+		);
+		expect(rewritten).not.toContain("data-[active=true]:font-medium");
+	});
+
 	it("leaves Tailwind-shaped custom classes listed in preserveClasses", () => {
 		ATOMIC_RUNTIME.preserveClasses.push("text-logo", /^flex-container$/);
 		const {code, changed} = applyAtomicCss(`
@@ -784,6 +813,16 @@ describe("isUtilityRule", () => {
 		).toBe(true);
 		expect(
 			firstRule(
+				".data-\\[active\\=true\\]\\:font-medium[data-active=true] { font-weight: 500 }",
+			),
+		).toBe(true);
+		expect(
+			firstRule(
+				".aria-selected\\:bg-red-500[aria-selected=\"true\"] { background-color: red }",
+			),
+		).toBe(true);
+		expect(
+			firstRule(
 				".placeholder-gray-400::placeholder { color: #9ca3af }",
 			),
 		).toBe(true);
@@ -862,6 +901,9 @@ describe("looksLikeTailwindUtilityClass", () => {
 			"min-h-screen",
 			"!px-4",
 			"from-primary/[0.05]",
+			"data-[active=true]:font-medium",
+			"data-[state=open]:flex",
+			"aria-selected:bg-red-500",
 		]) {
 			expect(looksLikeTailwindUtilityClass(name)).toBe(true);
 		}

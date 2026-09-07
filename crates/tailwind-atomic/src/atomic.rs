@@ -142,30 +142,27 @@ fn skip_css_escape(bytes: &[u8], i: usize) -> usize {
 }
 
 fn is_class_name_terminator(b: u8) -> bool {
-    matches!(b, b' ' | b'.' | b':' | b'#' | b'>' | b'+' | b'~' | b',')
+    // Unescaped `[` starts an attribute selector (`.data-\[x\]\:flex[data-x]`),
+    // not an arbitrary value. Arbitrary `[…]` in class idents is escaped (`\[`).
+    matches!(
+        b,
+        b' ' | b'.' | b':' | b'#' | b'>' | b'+' | b'~' | b',' | b'['
+    )
 }
 
-/// Scan a CSS class ident after `.`, including Tailwind arbitrary chunks (`[…]`)
-/// so `.from-primary/[0.05]` stays one name instead of stopping at `[`.
+/// Scan a CSS class ident after `.`. Escaped `\[` stays in the name
+/// (`.from-primary\/\[0\.05\]`); a raw `[` ends the ident so
+/// `[data-active=true]` remains a suffix on the selector.
 fn scan_class_name_end(bytes: &[u8], mut i: usize) -> usize {
-    let mut bracket = 0i32;
     while i < bytes.len() {
         if bytes[i] == b'\\' {
             i = skip_css_escape(bytes, i);
             continue;
         }
-        match bytes[i] {
-            b'[' => {
-                bracket += 1;
-                i += 1;
-            }
-            b']' if bracket > 0 => {
-                bracket -= 1;
-                i += 1;
-            }
-            b if bracket == 0 && is_class_name_terminator(b) => break,
-            _ => i += 1,
+        if is_class_name_terminator(bytes[i]) {
+            break;
         }
+        i += 1;
     }
     i
 }
@@ -665,6 +662,61 @@ mod tests {
         let hashed = out.class_map.get("hover:bg-red-500").expect("mapped");
         assert!(out.css.contains(&format!(".{hashed}:hover")));
         assert!(!out.css.contains(".hover\\:bg-red-500"));
+    }
+
+    #[test]
+    fn atomicizes_data_and_aria_attribute_variants() {
+        let out = atomicize_stylesheet(
+            r#"
+.data-\[active\=true\]\:font-medium[data-active=true] {
+  --tw-font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-medium);
+}
+.data-\[state\=open\]\:flex[data-state=open] { display: flex }
+.aria-selected\:bg-red-500[aria-selected="true"] { background-color: red }
+.open\:hidden[open] { display: none }
+.flex { display: flex }
+"#,
+        )
+        .unwrap();
+
+        let data_font = out
+            .class_map
+            .get("data-[active=true]:font-medium")
+            .expect("data-[active=true]:font-medium");
+        let data_flex = out
+            .class_map
+            .get("data-[state=open]:flex")
+            .expect("data-[state=open]:flex");
+        assert!(out.class_map.get("aria-selected:bg-red-500").is_some());
+        assert!(out.class_map.get("open:hidden").is_some());
+        assert!(out.class_map.get("flex").is_some());
+
+        let font_hash = data_font.split_whitespace().next().expect("hash");
+        let flex_hash = data_flex.split_whitespace().next().expect("hash");
+        assert!(
+            out.css.contains(&format!(".{font_hash}[data-active=true]"))
+                || out.css.contains(&format!(".{font_hash}[data-active=\"true\"]")),
+            "expected hashed data-active suffix, css={}",
+            out.css
+        );
+        assert!(
+            out.css.contains(&format!(".{flex_hash}[data-state=open]"))
+                || out.css.contains(&format!(".{flex_hash}[data-state=\"open\"]")),
+            "expected hashed data-state suffix, css={}",
+            out.css
+        );
+        assert!(!out.css.contains(".data-\\[active"));
+        assert!(!out.css.contains(".data-\\[state"));
+
+        let rewritten = crate::rewrite_class_string(
+            "data-[active=true]:font-medium flex data-[state=open]:flex",
+            &out.class_map,
+        );
+        assert!(rewritten.contains(font_hash));
+        assert!(rewritten.contains(flex_hash));
+        assert!(!rewritten.contains("data-[active=true]:font-medium"));
+        assert!(!rewritten.contains("data-[state=open]:flex"));
     }
 
     #[test]

@@ -67,6 +67,12 @@ export default function HomePage() {
 			</section>
 
 			<section className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-zinc-700 p-6">
+				<span
+					data-active="true"
+					className="data-[active=true]:font-medium text-sm text-zinc-300"
+				>
+					data-active
+				</span>
 				<button
 					type="button"
 					className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-zinc-950"

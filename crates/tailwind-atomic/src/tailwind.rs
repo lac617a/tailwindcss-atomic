@@ -439,6 +439,9 @@ mod tests {
             "data-[state=open]:flex",
             "sm:grid-cols-[3rem_minmax(0,1fr)_7rem]",
             "from-primary/[0.05]",
+            "data-[active=true]:font-medium",
+            "aria-selected:bg-red-500",
+            "open:hidden",
         ] {
             assert!(
                 looks_like_tailwind_utility(name),

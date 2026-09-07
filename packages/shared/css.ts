@@ -574,7 +574,6 @@ function looksLikeCssModuleClass(
 }
 
 function scanClassNameEnd(selector: string, start: number) {
-	let bracket = 0;
 	let i = start;
 	while (i < selector.length) {
 		const ch = selector[i];
@@ -582,17 +581,7 @@ function scanClassNameEnd(selector: string, start: number) {
 			i += 2;
 			continue;
 		}
-		if (ch === "[") {
-			bracket += 1;
-			i += 1;
-			continue;
-		}
-		if (ch === "]" && bracket > 0) {
-			bracket -= 1;
-			i += 1;
-			continue;
-		}
-		if (bracket === 0 && /[\s.:#>+~,]/.test(ch)) break;
+		if (/[\s.:#>+~,\[\]]/.test(ch)) break;
 		i += 1;
 	}
 	return i;

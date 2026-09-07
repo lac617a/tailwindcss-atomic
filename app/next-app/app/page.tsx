@@ -1,3 +1,4 @@
+import Nexi from "./nexi";
 import {ToggleChip} from "./toggle-chip";
 
 export default function HomePage() {
@@ -10,6 +11,7 @@ export default function HomePage() {
 				<h1 className="text-4xl font-semibold tracking-tight text-white">
 					Tailwind Atomic
 				</h1>
+				<Nexi className="mt-2" />
 				<p className="max-w-xl text-base leading-7 text-red-400">
 					Inspecciona el DOM:{" "}
 					<code className="rounded bg-zinc-900 px-1.5 py-0.5 text-sky-300">

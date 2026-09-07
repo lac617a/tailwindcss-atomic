@@ -1,0 +1,433 @@
+.nexi {
+  --s: 160px;
+  --c-white: var(--cube-white, #f4f4f5);
+  --c-yellow: var(--cube-yellow, #f5c518);
+  --c-red: var(--cube-red, #ef4444);
+  --c-orange: var(--cube-orange, #f97316);
+  --c-blue: var(--cube-blue, #3b82f6);
+  --c-green: var(--cube-green, #22c55e);
+
+  --tone: var(--primary, #3b82f6);
+  --stock: color-mix(in oklab, var(--tone) 7%, #f6f5f1);
+  --ink: color-mix(in oklab, var(--tone) 12%, #15151c);
+  --color: color-mix(in oklab, var(--tone) 78%, var(--stock));
+  --plate: color-mix(in oklab, var(--tone) 55%, var(--stock));
+  --plate-o: 0.06;
+
+  --fill: var(--stock);
+  --limb: color-mix(in oklab, var(--tone) 16%, var(--stock));
+  --ink-w: 4.5;
+
+  position: relative;
+  width: var(--s);
+  height: var(--s);
+  flex: 0 0 auto;
+}
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+:global(.dark) .nexi {
+  --stock: color-mix(in oklab, var(--tone) 10%, #e9e7e1);
+  --ink: color-mix(in oklab, var(--tone) 14%, #101016);
+  --plate: color-mix(in oklab, var(--tone) 50%, #101016);
+  --plate-o: 0.5;
+}
+
+.plate {
+  fill: var(--plate);
+  opacity: var(--plate-o);
+  transform-box: view-box;
+  transform-origin: 50px 44px;
+  transform: translate(6.5px, 6.5px) rotate(1.5deg);
+  animation: n-register 7s ease-in-out infinite;
+}
+.body {
+  fill: var(--fill);
+  stroke: var(--ink);
+  stroke-width: var(--ink-w);
+  stroke-linejoin: round;
+}
+.limbs rect {
+  fill: var(--limb);
+  stroke: var(--ink);
+  stroke-width: var(--ink-w);
+  stroke-linejoin: round;
+}
+.wave {
+  transform-box: view-box;
+  transform-origin: 80px 44.5px;
+  animation: n-wave 0.9s ease-in-out infinite;
+}
+
+.eye {
+  fill: var(--ink);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.glint {
+  fill: var(--fill);
+}
+.eyeLine,
+.mouthLine {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+}
+.mouthFill {
+  fill: var(--ink);
+}
+.tongue {
+  fill: var(--color);
+}
+.brows rect {
+  fill: var(--ink);
+}
+.cheeks rect {
+  fill: var(--color);
+  opacity: 0.8;
+}
+.sweat {
+  fill: var(--c-blue);
+  stroke: var(--ink);
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: n-sweat 2.2s ease-in infinite;
+}
+
+.fx {
+  pointer-events: none;
+}
+.orbit,
+.thinkDot,
+.spark,
+.confetti {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.orbit {
+  transform-box: view-box;
+  transform-origin: 50px 44px;
+  animation: n-orbit 1.4s linear infinite;
+}
+.thinkDot {
+  fill: var(--stock);
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: n-think 1.6s ease-in-out infinite;
+}
+.zzz,
+.qmark {
+  fill: var(--stock);
+  stroke: var(--ink);
+  stroke-width: 2;
+  paint-order: stroke;
+  font-family: 'Space Grotesk', ui-monospace, monospace;
+  font-weight: 700;
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+}
+.zzz {
+  animation: n-zzz 3s ease-in-out infinite;
+}
+.qmark {
+  animation: n-q 3.2s ease-in-out infinite;
+}
+.spark,
+.confetti {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.spark {
+  animation: n-spark 1.4s ease-in-out infinite;
+}
+.confetti {
+  animation: n-confetti 1.6s ease-in infinite;
+}
+
+.figure {
+  transform-box: fill-box;
+  transform-origin: 50% 92%;
+  animation: n-float 3.6s ease-in-out infinite;
+}
+
+@keyframes n-register {
+  0%,
+  100% {
+    transform: translate(6.5px, 6.5px) rotate(1.5deg);
+  }
+  50% {
+    transform: translate(4.5px, 8px) rotate(0.4deg);
+  }
+}
+@keyframes n-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes n-tilt {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(4deg);
+  }
+}
+@keyframes n-wobble {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(3deg);
+  }
+}
+@keyframes n-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-0.6px);
+  }
+  75% {
+    transform: translateX(0.6px);
+  }
+}
+@keyframes n-jump {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  15% {
+    transform: translateY(2px) scale(1.06, 0.92);
+  }
+  45% {
+    transform: translateY(-14px) scale(0.96, 1.05);
+  }
+  75% {
+    transform: translateY(0) scale(1.03, 0.97);
+  }
+}
+@keyframes n-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes n-breathe {
+  0%,
+  100% {
+    transform: rotate(-7deg) scale(1);
+  }
+  50% {
+    transform: rotate(-7deg) scale(1.035);
+  }
+}
+@keyframes n-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes n-look {
+  0%,
+  100% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+@keyframes n-wave {
+  0%,
+  100% {
+    transform: rotate(-38deg);
+  }
+  50% {
+    transform: rotate(-72deg);
+  }
+}
+@keyframes n-orbit {
+  from {
+    transform: rotate(0deg) translateX(46px);
+  }
+  to {
+    transform: rotate(360deg) translateX(46px);
+  }
+}
+@keyframes n-think {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2.5px);
+  }
+}
+@keyframes n-zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 6px) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(10px, -14px) scale(1.1);
+  }
+}
+@keyframes n-q {
+  0%,
+  55%,
+  100% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  70%,
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes n-spark {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1) rotate(90deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1) rotate(120deg);
+  }
+  80% {
+    opacity: 0;
+    transform: scale(0.4) rotate(160deg);
+  }
+}
+@keyframes n-confetti {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(70px) rotate(320deg);
+  }
+}
+@keyframes n-sweat {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(12px) scale(1);
+  }
+  85%,
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+  }
+}
+
+.stIdle .eye {
+  animation: n-blink 4.6s infinite;
+}
+.stEmpty .figure {
+  animation: n-tilt 5s ease-in-out infinite;
+}
+.stEmpty .eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: n-look 5s ease-in-out infinite;
+}
+.stEmpty .eye {
+  animation: n-blink 4.2s infinite;
+}
+.stSolving .figure {
+  animation:
+    n-float 3.6s ease-in-out infinite,
+    n-shake 0.28s ease-in-out infinite;
+}
+.stLoading .figure {
+  animation: n-wobble 1.8s ease-in-out infinite;
+}
+.stPb .figure {
+  animation: n-jump 1.1s cubic-bezier(0.5, 0, 0.3, 1) infinite;
+}
+.stPb .plate {
+  animation: n-register 1.1s ease-in-out infinite;
+}
+.stHello .figure {
+  animation: n-wobble 1.4s ease-in-out infinite;
+}
+.stWink .figure {
+  animation: n-bounce 1s ease-in-out infinite;
+}
+.stThink .figure {
+  animation: n-tilt 6s ease-in-out infinite;
+}
+.stThink .eyes {
+  transform: translate(3px, -3px);
+}
+.stSleep .figure {
+  animation: n-breathe 3.6s ease-in-out infinite;
+}
+.stOops .figure {
+  animation: n-wobble 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .figure,
+  .plate,
+  .eye,
+  .eyes,
+  .wave,
+  .orbit,
+  .thinkDot,
+  .zzz,
+  .qmark,
+  .spark,
+  .confetti,
+  .sweat {
+    animation: none !important;
+  }
+  .wave {
+    transform: rotate(-52deg);
+  }
+}

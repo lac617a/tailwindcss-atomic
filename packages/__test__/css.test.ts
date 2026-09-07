@@ -347,6 +347,40 @@ describe("applyAtomicCss", () => {
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe("_aaaaaa");
 	});
 
+	it("ignores a full-sheet WASM result that hashed custom component classes", () => {
+		wasmMock.impl = (css: string) => {
+			const class_map: Record<string, string> = {};
+			if (css.includes("header-signin")) {
+				class_map["header-signin"] = "_aaaaaa";
+			}
+			if (/(?:^|\{|\s)\.flex\b/.test(css) || css.includes(".flex {")) {
+				class_map.flex = "_bbbbbb";
+			}
+			return {
+				class_map,
+				css_rules: class_map.flex ? ["._bbbbbb { display: flex }"] : [],
+				css: css
+					.replaceAll(".header-signin", "._aaaaaa")
+					.replaceAll(".flex", "._bbbbbb"),
+				changed: true,
+			};
+		};
+
+		const {code, changed} = applyAtomicCss(`
+.header-signin { position: relative; isolation: isolate; background-color: var(--primary) }
+.header-signin::before { content: ""; position: absolute }
+.header-signin::after { content: "" }
+.flex { display: flex }
+`);
+		expect(changed).toBe(true);
+		expect(code).toContain(".header-signin");
+		expect(code).toContain("::before");
+		expect(code).toContain("var(--primary)");
+		expect(ATOMIC_RUNTIME.classMap["header-signin"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".flex {");
+	});
+
 	it("keeps utilities when the compiler returns no replacement rules", () => {
 		wasmMock.impl = () => ({class_map: {flex: "_aaaaaa"}, css_rules: null});
 		const css = ".flex { display: flex }";
@@ -623,15 +657,18 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 
 	it("leaves custom hyphenated component classes intact", () => {
 		const {code, changed} = applyAtomicCss(`
-.header-signin { color: red }
-.btn-notch { display: flex }
+.header-signin { position: relative; isolation: isolate; background-color: var(--primary) }
+.header-signin::before { content: ""; position: absolute }
+.header-signin::after { content: "" }
+.btn-notch { --btn-cut: 9px; clip-path: polygon(0 0, 100% 100%) }
 .flex { display: flex }
 .p-4 { padding: 1rem }
 `);
 		expect(changed).toBe(true);
 		expect(code).toContain(".header-signin");
+		expect(code).toContain("::before");
 		expect(code).toContain(".btn-notch");
-		expect(code).toContain("color: red");
+		expect(code).toContain("var(--primary)");
 		expect(ATOMIC_RUNTIME.classMap["header-signin"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["btn-notch"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);

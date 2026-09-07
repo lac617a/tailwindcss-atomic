@@ -82,10 +82,14 @@ fn is_tailwind_space_or_divide_selector(selector: &str) -> bool {
 }
 
 fn has_component_pseudo_element(selector: &str) -> bool {
-    if !selector.contains("::") {
+    if has_tailwind_variant_escape(selector) {
         return false;
     }
-    if has_tailwind_variant_escape(selector) {
+    // lightningcss prints `:before` / `:after`; source CSS often uses `::`.
+    if selector.contains(":before") || selector.contains(":after") {
+        return true;
+    }
+    if !selector.contains("::") {
         return false;
     }
     let mut stripped = selector.to_string();
@@ -393,7 +397,33 @@ fn has_declarations(block: &DeclarationBlock<'_>) -> bool {
 struct EmitCtx<'a> {
     class_map: &'a mut HashMap<String, Vec<String>>,
     seen: &'a mut HashSet<String>,
+    component_classes: &'a HashSet<String>,
     changed: bool,
+}
+
+fn collect_component_classes(rules: &[CssRule<'_>], out: &mut HashSet<String>) {
+    for rule in rules {
+        match rule {
+            CssRule::Style(style) => {
+                let selector = to_css(&style.selectors);
+                if has_component_pseudo_element(&selector) {
+                    if let Some((_, raw)) = first_class_in_selector(&selector) {
+                        let name = normalize_utility_class_name(&raw);
+                        if !name.is_empty() {
+                            out.insert(name);
+                        }
+                    }
+                }
+                collect_component_classes(&style.rules.0, out);
+            }
+            CssRule::Media(media) => collect_component_classes(&media.rules.0, out),
+            CssRule::Supports(supports) => collect_component_classes(&supports.rules.0, out),
+            CssRule::Container(container) => collect_component_classes(&container.rules.0, out),
+            CssRule::LayerBlock(layer) => collect_component_classes(&layer.rules.0, out),
+            CssRule::StartingStyle(starting) => collect_component_classes(&starting.rules.0, out),
+            _ => {}
+        }
+    }
 }
 
 fn emit_style_rule(
@@ -410,7 +440,7 @@ fn emit_style_rule(
         return String::new();
     };
     let original = normalize_utility_class_name(&raw_class);
-    if original.is_empty() {
+    if original.is_empty() || ctx.component_classes.contains(&original) {
         return String::new();
     }
 
@@ -517,7 +547,13 @@ fn emit_rules(
                 let selector = resolve_nested_selector(parent_selector, &raw_selector);
                 let nested_empty = style.rules.0.is_empty();
                 let theme_tokens = has_theme_custom_properties(&style.declarations);
-                let utility = is_utility_selector(&selector);
+                let utility = is_utility_selector(&selector)
+                    && first_class_in_selector(&selector)
+                        .map(|(_, raw)| {
+                            !ctx.component_classes
+                                .contains(&normalize_utility_class_name(&raw))
+                        })
+                        .unwrap_or(true);
 
                 // Skins / componentes con anidación: no desanidar.
                 if (!utility || theme_tokens) && !nested_empty {
@@ -570,9 +606,12 @@ pub fn atomicize_stylesheet(raw_css: &str) -> Result<AtomicOutput, String> {
 
     let mut class_lists: HashMap<String, Vec<String>> = HashMap::new();
     let mut seen = HashSet::new();
+    let mut component_classes = HashSet::new();
+    collect_component_classes(&stylesheet.rules.0, &mut component_classes);
     let mut ctx = EmitCtx {
         class_map: &mut class_lists,
         seen: &mut seen,
+        component_classes: &component_classes,
         changed: false,
     };
     let css = emit_rules(&stylesheet.rules.0, None, &mut ctx);
@@ -921,5 +960,33 @@ mod tests {
         assert!(out.class_map.get("before:content-['']").is_some());
         assert!(!out.css.contains(".flex {"));
         assert!(!out.css.contains(".p-4 {"));
+    }
+
+    #[test]
+    fn preserves_component_base_when_pseudo_elements_exist() {
+        let out = atomicize_stylesheet(
+            r#"
+.header-signin {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--primary);
+}
+.header-signin::before {
+  content: "";
+  position: absolute;
+}
+.header-signin::after {
+  content: "";
+}
+.flex { display: flex }
+"#,
+        )
+        .unwrap();
+
+        assert!(out.css.contains(".header-signin"));
+        assert!(out.css.contains(".header-signin:before") || out.css.contains(".header-signin::before"));
+        assert!(out.class_map.get("header-signin").is_none());
+        assert!(out.class_map.get("flex").is_some());
+        assert!(!out.css.contains(".flex {"));
     }
 }

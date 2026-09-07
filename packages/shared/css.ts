@@ -459,6 +459,19 @@ function hasNestedChildRules(node: PostcssRule) {
 	);
 }
 
+/** Tailwind v4 nests `@media` / `&:hover` under the utility selector. */
+function isTailwindUtilityNesting(node: PostcssRule) {
+	return (node.nodes ?? []).every((child) => {
+		if (child.type === "decl" || child.type === "comment") return true;
+		if (child.type === "atrule") return NESTED_AT_RULES.has(child.name);
+		if (child.type === "rule") {
+			const sel = child.selector.trim();
+			return sel.startsWith("&") || sel.startsWith(":");
+		}
+		return false;
+	});
+}
+
 function hasTailwindVariantEscape(selector: string) {
 	return selector.includes("\\:");
 }
@@ -898,9 +911,28 @@ function firstClassToken(selector: string) {
 	return selector.match(/(?<!\\)\.((?:\\.|[^\s.:#[\]>+~,])+)/)?.[1];
 }
 
+function collectComponentClassNames(
+	container: PostcssRoot,
+	names: Set<string> = new Set(),
+) {
+	for (const node of container.nodes ?? []) {
+		if (node.type === "rule") {
+			for (const part of splitCommaSelectors(node.selector)) {
+				if (!hasComponentPseudoElement(part)) continue;
+				const token = firstClassToken(part);
+				if (token) names.add(unescapeCssClassName(token));
+			}
+		} else if (node.type === "atrule") {
+			collectComponentClassNames(node as unknown as PostcssRoot, names);
+		}
+	}
+	return names;
+}
+
 function isSingleUtilitySelector(
 	selector: string,
 	protectUnhashedLocals = false,
+	componentNames?: Set<string>,
 ) {
 	const sel = selector.trim();
 	if (!sel.includes(".")) return false;
@@ -908,6 +940,9 @@ function isSingleUtilitySelector(
 	if (isTailwindSpaceOrDivideSelector(sel)) {
 		const token = firstClassToken(sel);
 		if (!token || looksLikeCssModuleClass(token, protectUnhashedLocals)) {
+			return false;
+		}
+		if (componentNames?.has(unescapeCssClassName(token))) {
 			return false;
 		}
 		return looksLikeTailwindUtilityClass(token);
@@ -923,6 +958,9 @@ function isSingleUtilitySelector(
 
 	const token = firstClassToken(sel);
 	if (!token || looksLikeCssModuleClass(token, protectUnhashedLocals)) {
+		return false;
+	}
+	if (componentNames?.has(unescapeCssClassName(token))) {
 		return false;
 	}
 
@@ -987,11 +1025,15 @@ function splitCommaSelectors(selector: string) {
 	return parts;
 }
 
-function isUtilitySelector(selector: string, protectUnhashedLocals = false) {
+function isUtilitySelector(
+	selector: string,
+	protectUnhashedLocals = false,
+	componentNames?: Set<string>,
+) {
 	const parts = splitCommaSelectors(selector);
 	if (!parts.length) return false;
 	return parts.every((part) =>
-		isSingleUtilitySelector(part, protectUnhashedLocals),
+		isSingleUtilitySelector(part, protectUnhashedLocals, componentNames),
 	);
 }
 
@@ -1004,12 +1046,15 @@ function isUtilitySelector(selector: string, protectUnhashedLocals = false) {
 function isUtilityRule(
 	node: ChildNode,
 	protectUnhashedLocals = false,
+	componentNames?: Set<string>,
 ): node is PostcssRule {
 	if (node.type !== "rule") return false;
 	if (!String(node.selector).includes(".")) return false;
 	if (hasThemeCustomProperties(node)) return false;
-	if (hasNestedChildRules(node)) return false;
-	if (!isUtilitySelector(node.selector, protectUnhashedLocals)) return false;
+	if (hasNestedChildRules(node) && !isTailwindUtilityNesting(node)) return false;
+	if (!isUtilitySelector(node.selector, protectUnhashedLocals, componentNames)) {
+		return false;
+	}
 	return true;
 }
 
@@ -1020,11 +1065,12 @@ function isHashedAtomicSelector(selector: string) {
 function atomicizeUtilityNodes(
 	container: PostcssRoot,
 	protectUnhashedLocals = false,
+	componentNames?: Set<string>,
 ) {
 	if (!container.nodes) return false;
 
 	const utilityNodes = container.nodes.filter((node) =>
-		isUtilityRule(node, protectUnhashedLocals),
+		isUtilityRule(node, protectUnhashedLocals, componentNames),
 	);
 	if (!utilityNodes.length) return false;
 
@@ -1062,10 +1108,15 @@ function atomicizeUtilityNodes(
 function atomicizeContainer(
 	container: PostcssRoot,
 	protectUnhashedLocals = false,
+	componentNames?: Set<string>,
 ) {
 	if (!container.nodes) return false;
 
-	let mapChanged = atomicizeUtilityNodes(container, protectUnhashedLocals);
+	let mapChanged = atomicizeUtilityNodes(
+		container,
+		protectUnhashedLocals,
+		componentNames,
+	);
 
 	for (const node of [...container.nodes]) {
 		if (node.type === "atrule" && NESTED_AT_RULES.has(node.name)) {
@@ -1073,6 +1124,7 @@ function atomicizeContainer(
 				atomicizeContainer(
 					node as unknown as PostcssRoot,
 					protectUnhashedLocals,
+					componentNames,
 				)
 			) {
 				mapChanged = true;
@@ -1251,11 +1303,23 @@ function warnWasmFailure(error: unknown) {
 	);
 }
 
+function wasmClassMapIsSafe(
+	classMap: Record<string, string> | undefined,
+	componentNames: Set<string>,
+) {
+	return Object.keys(classMap ?? {}).every(
+		(key) =>
+			looksLikeTailwindUtilityClass(key) && !componentNames.has(key),
+	);
+}
+
 /**
  * Corre el WASM sobre la hoja completa cuando el crate devuelve `css`.
  * Conserva `@theme`, `:root`, preflight, bloques de tokens de skin
  * (`.pokerenchile { --color-*: … }`), componentes SCSS, `@keyframes` y `@media`.
  * Si el mock de tests no envía `css`, se usa el filtrado JS + `css_rules`.
+ * If WASM hashed custom/component classes (old crate, `.header-signin`),
+ * discard that sheet and classify utilities in JS instead.
  */
 function applyAtomicCss(css: string, from?: string) {
 	if (!css) {
@@ -1278,9 +1342,10 @@ function applyAtomicCss(css: string, from?: string) {
 	try {
 		const prev = {...ATOMIC_RUNTIME.classMap};
 		const protectUnhashedLocals = isCssModuleFile(from);
+		const root = postcss.parse(css);
+		flattenLayerAtRules(root);
+		const componentNames = collectComponentClassNames(root);
 
-		// WASM treats `.svg` / `.body` as utilities. In a CSS module those are
-		// still unhashed locals, so filter in JS and only send Tailwind-looking rules.
 		if (!protectUnhashedLocals) {
 			try {
 				const wasmResult = process_tailwind_css(css) as {
@@ -1290,7 +1355,10 @@ function applyAtomicCss(css: string, from?: string) {
 					changed?: boolean;
 				};
 
-				if (typeof wasmResult?.css === "string") {
+				if (
+					typeof wasmResult?.css === "string" &&
+					wasmClassMapIsSafe(wasmResult.class_map, componentNames)
+				) {
 					if (!wasmResult.changed && !wasmResult.css.trim()) {
 						return {code: css, changed: false};
 					}
@@ -1310,9 +1378,11 @@ function applyAtomicCss(css: string, from?: string) {
 			}
 		}
 
-		const root = postcss.parse(css);
-		flattenLayerAtRules(root);
-		const changed = atomicizeContainer(root, protectUnhashedLocals);
+		const changed = atomicizeContainer(
+			root,
+			protectUnhashedLocals,
+			componentNames,
+		);
 		if (!changed) {
 			return {code: css, changed: false};
 		}

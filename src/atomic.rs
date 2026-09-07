@@ -67,8 +67,8 @@ fn is_tailwind_space_or_divide_selector(selector: &str) -> bool {
     let mut class_end = 1;
     while class_end < bytes.len() {
         let b = bytes[class_end];
-        if b == b'\\' && class_end + 1 < bytes.len() {
-            class_end += 2;
+        if b == b'\\' {
+            class_end = skip_css_escape(bytes, class_end);
             continue;
         }
         if matches!(b, b' ' | b'>' | b'+' | b'~') {
@@ -102,16 +102,22 @@ fn has_non_utility_combinator(selector: &str) -> bool {
     let bytes = selector.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() {
-            i += 2;
+        if bytes[i] == b'\\' {
+            i = skip_css_escape(bytes, i);
             continue;
         }
         if bytes[i] == b'(' {
             normalized.push_str("()");
             while i < bytes.len() && bytes[i] != b')' {
+                if bytes[i] == b'\\' {
+                    i = skip_css_escape(bytes, i);
+                    continue;
+                }
                 i += 1;
             }
-            i += 1;
+            if i < bytes.len() {
+                i += 1;
+            }
             continue;
         }
         normalized.push(bytes[i] as char);
@@ -122,13 +128,21 @@ fn has_non_utility_combinator(selector: &str) -> bool {
         .any(|ch| matches!(ch, ' ' | '>' | '+' | '~'))
 }
 
+fn skip_css_escape(bytes: &[u8], i: usize) -> usize {
+    if i < bytes.len() && bytes[i] == b'\\' {
+        (i + 2).min(bytes.len())
+    } else {
+        i
+    }
+}
+
 fn count_unescaped_classes(selector: &str) -> usize {
     let bytes = selector.as_bytes();
     let mut count = 0;
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'\\' {
-            i += 2;
+            i = skip_css_escape(bytes, i);
             continue;
         }
         if bytes[i] == b'.' {
@@ -136,7 +150,7 @@ fn count_unescaped_classes(selector: &str) -> usize {
             i += 1;
             while i < bytes.len() {
                 if bytes[i] == b'\\' {
-                    i += 2;
+                    i = skip_css_escape(bytes, i);
                     continue;
                 }
                 if matches!(
@@ -154,12 +168,68 @@ fn count_unescaped_classes(selector: &str) -> usize {
     count
 }
 
+/// Split a selector list on top-level commas only.
+/// Escaped commas (`\,`), quoted strings and nested `()` / `[]` stay intact so
+/// Tailwind arbitrary values like `.transition-\[color\,box-shadow\]` remain one selector.
 fn split_comma_selectors(selector: &str) -> Vec<&str> {
-    selector
-        .split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect()
+    let bytes = selector.as_bytes();
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    let mut paren = 0i32;
+    let mut bracket = 0i32;
+    let mut quote: Option<u8> = None;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'\\' {
+            i = skip_css_escape(bytes, i);
+            continue;
+        }
+        if let Some(q) = quote {
+            if b == q {
+                quote = None;
+            }
+            i += 1;
+            continue;
+        }
+        match b {
+            b'"' | b'\'' => {
+                quote = Some(b);
+                i += 1;
+            }
+            b'(' => {
+                paren += 1;
+                i += 1;
+            }
+            b')' => {
+                paren = paren.saturating_sub(1);
+                i += 1;
+            }
+            b'[' => {
+                bracket += 1;
+                i += 1;
+            }
+            b']' => {
+                bracket = bracket.saturating_sub(1);
+                i += 1;
+            }
+            b',' if paren == 0 && bracket == 0 => {
+                if let Some(part) = selector.get(start..i).map(str::trim).filter(|p| !p.is_empty())
+                {
+                    parts.push(part);
+                }
+                i += 1;
+                start = i;
+            }
+            _ => i += 1,
+        }
+    }
+
+    if let Some(part) = selector.get(start..).map(str::trim).filter(|p| !p.is_empty()) {
+        parts.push(part);
+    }
+    parts
 }
 
 fn looks_like_css_module_class(class_name: &str) -> bool {
@@ -222,7 +292,7 @@ fn first_class_in_selector(selector: &str) -> Option<(usize, String)> {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'\\' {
-            i += 2;
+            i = skip_css_escape(bytes, i);
             continue;
         }
         if bytes[i] == b'.' {
@@ -231,7 +301,7 @@ fn first_class_in_selector(selector: &str) -> Option<(usize, String)> {
             let class_start = i;
             while i < bytes.len() {
                 if bytes[i] == b'\\' {
-                    i += 2;
+                    i = skip_css_escape(bytes, i);
                     continue;
                 }
                 if matches!(
@@ -242,7 +312,10 @@ fn first_class_in_selector(selector: &str) -> Option<(usize, String)> {
                 }
                 i += 1;
             }
-            let raw = &selector[class_start..i];
+            let raw = selector.get(class_start..i.min(selector.len()))?;
+            if raw.is_empty() {
+                return None;
+            }
             return Some((start, raw.to_string()));
         }
         i += 1;
@@ -252,11 +325,14 @@ fn first_class_in_selector(selector: &str) -> Option<(usize, String)> {
 
 fn replace_first_class(selector: &str, new_class: &str) -> String {
     if let Some((dot_at, raw)) = first_class_in_selector(selector) {
-        let mut out = String::with_capacity(selector.len());
-        out.push_str(&selector[..dot_at]);
+        let rest_at = dot_at.saturating_add(1).saturating_add(raw.len());
+        let prefix = selector.get(..dot_at).unwrap_or("");
+        let suffix = selector.get(rest_at..).unwrap_or("");
+        let mut out = String::with_capacity(prefix.len() + new_class.len() + suffix.len() + 1);
+        out.push_str(prefix);
         out.push('.');
         out.push_str(new_class);
-        out.push_str(&selector[dot_at + 1 + raw.len()..]);
+        out.push_str(suffix);
         return out;
     }
     format!(".{new_class}")
@@ -709,5 +785,44 @@ mod tests {
         assert!(out.class_map.get("flex").is_some());
         assert!(out.class_map.get("bg-background").is_some());
         assert!(out.class_map.get("dark").is_none());
+    }
+
+    #[test]
+    fn escaped_commas_in_arbitrary_values_do_not_panic() {
+        let cases = [
+            (".flex{display:flex}", "flex"),
+            (".w-\\[calc\\(100px\\)\\]{width:calc(100px)}", "w-[calc(100px)]"),
+            (".\\[color\\:red\\]{color:red}", "[color:red]"),
+            (".a\\,b{color:red}", "a,b"),
+            (
+                ".transition-\\[color\\,box-shadow\\]{transition-property:color,box-shadow}",
+                "transition-[color,box-shadow]",
+            ),
+            (
+                ".grid-cols-\\[repeat\\(auto-fill\\,minmax\\(220px\\,1fr\\)\\)\\]{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}",
+                "grid-cols-[repeat(auto-fill,minmax(220px,1fr))]",
+            ),
+            (
+                ".\\[transition-timing-function\\:cubic-bezier\\(0\\.34\\,1\\.56\\,0\\.64\\,1\\)\\]{transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)}",
+                "[transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]",
+            ),
+            (
+                ".sm\\:grid-cols-\\[3rem_minmax\\(0\\,1fr\\)_7rem\\]{grid-template-columns:3rem minmax(0,1fr) 7rem}",
+                "sm:grid-cols-[3rem_minmax(0,1fr)_7rem]",
+            ),
+            (
+                ".\\[\\&\\:hover\\>svg\\]\\:drop-shadow-\\[0_0_6px_rgba\\(250\\,204\\,21\\,0\\.4\\)\\]{filter:drop-shadow(0 0 6px rgba(250,204,21,.4))}",
+                "[&:hover>svg]:drop-shadow-[0_0_6px_rgba(250,204,21,0.4)]",
+            ),
+        ];
+        for (css, key) in cases {
+            let out = atomicize_stylesheet(css).unwrap_or_else(|e| panic!("failed {css}: {e}"));
+            assert!(
+                out.class_map.contains_key(key),
+                "missing {key} in {:?} for {css}",
+                out.class_map.keys().collect::<Vec<_>>()
+            );
+            assert!(out.changed, "expected change for {css}");
+        }
     }
 }

@@ -20,7 +20,7 @@ import {
 	stripSassModuleRules,
 	transformClassString,
 } from "../shared/css";
-import {wasmMock} from "./helpers";
+import {defaultProcessTailwindCss, wasmMock} from "./helpers";
 
 describe("isCssFile", () => {
 	it("accepts stylesheet extensions and strips queries", () => {
@@ -246,6 +246,46 @@ describe("applyAtomicCss", () => {
 `);
 		expect(changed).toBe(true);
 		expect(code).not.toContain("@layer");
+	});
+
+	it("falls back to PostCSS when WASM throws and warns once", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		let shouldThrow = true;
+		wasmMock.impl = (css: string) => {
+			if (shouldThrow) {
+				shouldThrow = false;
+				throw new Error("RuntimeError: unreachable");
+			}
+			return defaultProcessTailwindCss(css);
+		};
+
+		const first = applyAtomicCss(".flex { display: flex }");
+		expect(first.changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(first.code).not.toContain(".flex {");
+
+		const second = applyAtomicCss(".p-4 { padding: 1rem }");
+		expect(second.changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(String(warn.mock.calls[0]?.[0])).toContain("[tailwind-atomic]");
+		expect(String(warn.mock.calls[0]?.[0])).toContain("unreachable");
+		warn.mockRestore();
+	});
+
+	it("atomicizes Tailwind arbitrary values that contain escaped commas", () => {
+		const css = `
+.transition-\\[color\\,box-shadow\\] { transition-property: color, box-shadow }
+.flex { display: flex }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(
+			ATOMIC_RUNTIME.classMap["transition-[color,box-shadow]"],
+		).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".flex {");
 	});
 
 	it("uses a full stylesheet from WASM when `css` is present", () => {

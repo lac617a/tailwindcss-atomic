@@ -601,8 +601,66 @@ function isSingleUtilitySelector(
 	return true;
 }
 
+function splitCommaSelectors(selector: string) {
+	const parts: string[] = [];
+	let current = "";
+	let paren = 0;
+	let bracket = 0;
+	let quote: '"' | "'" | null = null;
+
+	for (let i = 0; i < selector.length; i++) {
+		const ch = selector[i];
+		if (ch === "\\" && i + 1 < selector.length) {
+			current += ch + selector[i + 1];
+			i += 1;
+			continue;
+		}
+		if (quote) {
+			current += ch;
+			if (ch === quote) quote = null;
+			continue;
+		}
+		if (ch === '"' || ch === "'") {
+			quote = ch;
+			current += ch;
+			continue;
+		}
+		if (ch === "(") {
+			paren += 1;
+			current += ch;
+			continue;
+		}
+		if (ch === ")") {
+			paren = Math.max(0, paren - 1);
+			current += ch;
+			continue;
+		}
+		if (ch === "[") {
+			bracket += 1;
+			current += ch;
+			continue;
+		}
+		if (ch === "]") {
+			bracket = Math.max(0, bracket - 1);
+			current += ch;
+			continue;
+		}
+		if (ch === "," && paren === 0 && bracket === 0) {
+			const part = current.trim();
+			if (part) parts.push(part);
+			current = "";
+			continue;
+		}
+		current += ch;
+	}
+
+	const last = current.trim();
+	if (last) parts.push(last);
+	return parts;
+}
+
 function isUtilitySelector(selector: string, protectUnhashedLocals = false) {
-	const parts = postcss.list.comma(selector).map((part) => part.trim());
+	const parts = splitCommaSelectors(selector);
 	if (!parts.length) return false;
 	return parts.every((part) =>
 		isSingleUtilitySelector(part, protectUnhashedLocals),
@@ -643,8 +701,18 @@ function atomicizeUtilityNodes(
 	if (!utilityNodes.length) return false;
 
 	const utilityCss = utilityNodes.map((node) => node.toString()).join("\n");
-	const {class_map, css_rules} = process_tailwind_css(utilityCss);
-	const mapChanged = mergeClassMap(class_map);
+	let class_map: Record<string, string> = {};
+	let css_rules: unknown;
+	try {
+		({class_map = {}, css_rules} = process_tailwind_css(utilityCss) as {
+			class_map?: Record<string, string>;
+			css_rules?: unknown;
+		});
+	} catch (error) {
+		warnWasmFailure(error);
+		return false;
+	}
+	const mapChanged = mergeClassMap(class_map ?? {});
 
 	const rules = Array.isArray(css_rules) ? css_rules : [];
 	if (!rules.length) return mapChanged;
@@ -818,6 +886,17 @@ function loadPersistedClassMap() {
 	}
 }
 
+let wasmFailureWarned = false;
+
+function warnWasmFailure(error: unknown) {
+	if (wasmFailureWarned) return;
+	wasmFailureWarned = true;
+	const message = error instanceof Error ? error.message : String(error);
+	console.warn(
+		`[tailwind-atomic] wasm atomicize failed, falling back to PostCSS: ${message}`,
+	);
+}
+
 /**
  * Corre el WASM sobre la hoja completa cuando el crate devuelve `css`.
  * Conserva `@theme`, `:root`, preflight, bloques de tokens de skin
@@ -849,27 +928,31 @@ function applyAtomicCss(css: string, from?: string) {
 		// WASM treats `.svg` / `.body` as utilities. In a CSS module those are
 		// still unhashed locals, so filter in JS and only send Tailwind-looking rules.
 		if (!protectUnhashedLocals) {
-			const wasmResult = process_tailwind_css(css) as {
-				class_map?: Record<string, string>;
-				css_rules?: unknown;
-				css?: string;
-				changed?: boolean;
-			};
-
-			if (typeof wasmResult?.css === "string") {
-				if (!wasmResult.changed && !wasmResult.css.trim()) {
-					return {code: css, changed: false};
-				}
-				const mapChanged = mergeClassMap(wasmResult.class_map ?? {});
-				if (!wasmResult.changed && !mapChanged) {
-					return {code: css, changed: false, mapChanged};
-				}
-				if (mapChanged) persistClassMap();
-				return {
-					code: formatAtomicCss(wasmResult.css),
-					changed: true,
-					mapChanged: classMapChangedSince(prev) || mapChanged,
+			try {
+				const wasmResult = process_tailwind_css(css) as {
+					class_map?: Record<string, string>;
+					css_rules?: unknown;
+					css?: string;
+					changed?: boolean;
 				};
+
+				if (typeof wasmResult?.css === "string") {
+					if (!wasmResult.changed && !wasmResult.css.trim()) {
+						return {code: css, changed: false};
+					}
+					const mapChanged = mergeClassMap(wasmResult.class_map ?? {});
+					if (!wasmResult.changed && !mapChanged) {
+						return {code: css, changed: false, mapChanged};
+					}
+					if (mapChanged) persistClassMap();
+					return {
+						code: formatAtomicCss(wasmResult.css),
+						changed: true,
+						mapChanged: classMapChangedSince(prev) || mapChanged,
+					};
+				}
+			} catch (error) {
+				warnWasmFailure(error);
 			}
 		}
 

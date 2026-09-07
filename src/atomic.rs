@@ -141,6 +141,35 @@ fn skip_css_escape(bytes: &[u8], i: usize) -> usize {
     }
 }
 
+fn is_class_name_terminator(b: u8) -> bool {
+    matches!(b, b' ' | b'.' | b':' | b'#' | b'>' | b'+' | b'~' | b',')
+}
+
+/// Scan a CSS class ident after `.`, including Tailwind arbitrary chunks (`[…]`)
+/// so `.from-primary/[0.05]` stays one name instead of stopping at `[`.
+fn scan_class_name_end(bytes: &[u8], mut i: usize) -> usize {
+    let mut bracket = 0i32;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' {
+            i = skip_css_escape(bytes, i);
+            continue;
+        }
+        match bytes[i] {
+            b'[' => {
+                bracket += 1;
+                i += 1;
+            }
+            b']' if bracket > 0 => {
+                bracket -= 1;
+                i += 1;
+            }
+            b if bracket == 0 && is_class_name_terminator(b) => break,
+            _ => i += 1,
+        }
+    }
+    i
+}
+
 fn count_unescaped_classes(selector: &str) -> usize {
     let bytes = selector.as_bytes();
     let mut count = 0;
@@ -152,20 +181,7 @@ fn count_unescaped_classes(selector: &str) -> usize {
         }
         if bytes[i] == b'.' {
             count += 1;
-            i += 1;
-            while i < bytes.len() {
-                if bytes[i] == b'\\' {
-                    i = skip_css_escape(bytes, i);
-                    continue;
-                }
-                if matches!(
-                    bytes[i],
-                    b' ' | b'.' | b':' | b'#' | b'[' | b']' | b'>' | b'+' | b'~' | b','
-                ) {
-                    break;
-                }
-                i += 1;
-            }
+            i = scan_class_name_end(bytes, i + 1);
             continue;
         }
         i += 1;
@@ -309,21 +325,8 @@ fn first_class_in_selector(selector: &str) -> Option<(usize, String)> {
         }
         if bytes[i] == b'.' {
             let start = i;
-            i += 1;
-            let class_start = i;
-            while i < bytes.len() {
-                if bytes[i] == b'\\' {
-                    i = skip_css_escape(bytes, i);
-                    continue;
-                }
-                if matches!(
-                    bytes[i],
-                    b' ' | b'.' | b':' | b'#' | b'[' | b']' | b'>' | b'+' | b'~' | b','
-                ) {
-                    break;
-                }
-                i += 1;
-            }
+            let class_start = i + 1;
+            i = scan_class_name_end(bytes, class_start);
             let raw = selector.get(class_start..i.min(selector.len()))?;
             if raw.is_empty() {
                 return None;
@@ -466,7 +469,12 @@ fn emit_style_rule(
         return String::new();
     }
 
-    ctx.class_map.insert(original, hashes);
+    let entry = ctx.class_map.entry(original).or_default();
+    for hash in hashes {
+        if !entry.contains(&hash) {
+            entry.push(hash);
+        }
+    }
     ctx.changed = true;
     css
 }
@@ -988,5 +996,49 @@ mod tests {
         assert!(out.class_map.get("header-signin").is_none());
         assert!(out.class_map.get("flex").is_some());
         assert!(!out.css.contains(".flex {"));
+    }
+
+    #[test]
+    fn atomicizes_supports_color_mix_arbitrary_opacity() {
+        let out = atomicize_stylesheet(
+            r#"
+@supports (color:color-mix(in lab,red,red)) {
+  .from-primary\/\[0\.05\] {
+    --tw-gradient-from: color-mix(in oklab, var(--primary) 5%, transparent);
+  }
+}
+"#,
+        )
+        .unwrap();
+
+        assert!(
+            out.class_map.get("from-primary/[0.05]").is_some(),
+            "css={}\nkeys={:?}",
+            out.css,
+            out.class_map.keys().collect::<Vec<_>>()
+        );
+        assert!(out.css.contains("@supports"), "css={}", out.css);
+        assert!(
+            out.css.contains("color-mix") && out.css.contains("--tw-gradient-from"),
+            "css={}",
+            out.css
+        );
+        assert!(
+            !out.css.contains(".from-primary"),
+            "original selector leaked: {}",
+            out.css
+        );
+        let hashed = out.class_map.get("from-primary/[0.05]").unwrap();
+        assert!(out.css.contains(&format!(".{hashed}")));
+
+        let rewritten = crate::classes::rewrite_class_string(
+            "bg-gradient-to-b from-primary/[0.05] to-transparent",
+            &out.class_map,
+        );
+        assert!(
+            rewritten.contains(hashed.split_whitespace().next().unwrap()),
+            "rewritten={rewritten}"
+        );
+        assert!(!rewritten.contains("from-primary/[0.05]"));
     }
 }

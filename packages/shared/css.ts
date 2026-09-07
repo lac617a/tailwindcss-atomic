@@ -423,8 +423,18 @@ function mergeClassMap(classMap: Record<string, string>) {
 		if (typeof value !== "string" || !value) continue;
 		const key = normalizeUtilityClassName(rawKey);
 		if (!key) continue;
-		if (ATOMIC_RUNTIME.classMap[key] !== value) {
+		const prev = ATOMIC_RUNTIME.classMap[key];
+		if (!prev) {
 			ATOMIC_RUNTIME.classMap[key] = value;
+			changed = true;
+			continue;
+		}
+		if (prev === value) continue;
+		const merged = [...new Set([...prev.split(/\s+/), ...value.split(/\s+/)])]
+			.filter(Boolean)
+			.join(" ");
+		if (merged !== prev) {
+			ATOMIC_RUNTIME.classMap[key] = merged;
 			changed = true;
 		}
 	}
@@ -501,7 +511,18 @@ function hasNonUtilityCombinator(selector: string) {
 }
 
 function countUnescapedClasses(selector: string) {
-	return selector.match(/(?<!\\)\.(?:\\.|[^\s.:#[\]>+~,])+/g)?.length ?? 0;
+	let count = 0;
+	for (let i = 0; i < selector.length; i++) {
+		if (selector[i] === "\\") {
+			i += 1;
+			continue;
+		}
+		if (selector[i] === ".") {
+			count += 1;
+			i = scanClassNameEnd(selector, i + 1) - 1;
+		}
+	}
+	return count;
 }
 
 /**
@@ -907,8 +928,43 @@ function looksLikeCssModuleClass(
 	return false;
 }
 
+function scanClassNameEnd(selector: string, start: number) {
+	let bracket = 0;
+	let i = start;
+	while (i < selector.length) {
+		const ch = selector[i];
+		if (ch === "\\" && i + 1 < selector.length) {
+			i += 2;
+			continue;
+		}
+		if (ch === "[") {
+			bracket += 1;
+			i += 1;
+			continue;
+		}
+		if (ch === "]" && bracket > 0) {
+			bracket -= 1;
+			i += 1;
+			continue;
+		}
+		if (bracket === 0 && /[\s.:#>+~,]/.test(ch)) break;
+		i += 1;
+	}
+	return i;
+}
+
 function firstClassToken(selector: string) {
-	return selector.match(/(?<!\\)\.((?:\\.|[^\s.:#[\]>+~,])+)/)?.[1];
+	for (let i = 0; i < selector.length; i++) {
+		if (ch === "\\") {
+			i += 1;
+			continue;
+		}
+		if (selector[i] === ".") {
+			const start = i + 1;
+			const end = scanClassNameEnd(selector, start);
+			if (end > start) return selector.slice(start, end);
+		}
+	}
 }
 
 function collectComponentClassNames(

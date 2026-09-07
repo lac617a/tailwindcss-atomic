@@ -675,6 +675,31 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(code).not.toContain(".flex {");
 	});
+
+	it("keeps @supports color-mix utilities and rewrites from-primary/[0.05]", () => {
+		const {code, changed} = applyAtomicCss(`
+@supports (color:color-mix(in lab,red,red)) {
+  .from-primary\\/\\[0\\.05\\] {
+    --tw-gradient-from: color-mix(in oklab, var(--primary) 5%, transparent);
+  }
+}
+.bg-gradient-to-b { background-image: linear-gradient(to bottom, var(--tw-gradient-stops)) }
+.to-transparent { --tw-gradient-to: transparent }
+`);
+		expect(changed).toBe(true);
+		expect(code).toContain("@supports");
+		expect(code).toContain("color-mix");
+		expect(ATOMIC_RUNTIME.classMap["from-primary/[0.05]"]).toMatch(
+			/^_[0-9a-f]{6}/,
+		);
+		expect(code).not.toContain(".from-primary");
+		const rewritten = transformClassString(
+			"bg-gradient-to-b from-primary/[0.05] to-transparent",
+			ATOMIC_RUNTIME.classMap,
+		);
+		expect(rewritten).toContain(ATOMIC_RUNTIME.classMap["from-primary/[0.05]"]);
+		expect(rewritten).not.toContain("from-primary/[0.05]");
+	});
 });
 
 describe("atomicizeContainer", () => {
@@ -749,6 +774,11 @@ describe("isUtilityRule", () => {
 			firstRule(".nexi-module__svg___tQf2a { display: block }"),
 		).toBe(false);
 		expect(firstRule(".w-\\[1fr__2fr\\] { width: 1fr }")).toBe(true);
+		expect(
+			firstRule(
+				".from-primary\\/\\[0\\.05\\] { --tw-gradient-from: color-mix(in oklab, var(--primary) 5%, transparent) }",
+			),
+		).toBe(true);
 	});
 
 	it("rejects custom hyphenated component classes", () => {
@@ -774,6 +804,7 @@ describe("looksLikeTailwindUtilityClass", () => {
 			"sr-only",
 			"min-h-screen",
 			"!px-4",
+			"from-primary/[0.05]",
 		]) {
 			expect(looksLikeTailwindUtilityClass(name)).toBe(true);
 		}

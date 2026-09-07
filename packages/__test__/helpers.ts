@@ -17,7 +17,7 @@ export function defaultProcessTailwindCss(css: string): TailwindCssResult {
 
 		let nextSelector = selector;
 		for (const classMatch of selector.matchAll(
-			/\.((?:\\.|[^\s.:#[\]>+~,])+)/g,
+			/\.((?:\\.|[^\s.:#>+~,[\]]|\[[^\]]*])+)/g,
 		)) {
 			const raw = classMatch[1];
 			if (!raw) continue;

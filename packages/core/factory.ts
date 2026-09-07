@@ -217,6 +217,9 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 	if (options.ignoreCss?.length) {
 		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
 	}
+	if (options.preserveClasses?.length) {
+		ATOMIC_RUNTIME.preserveClasses.push(...options.preserveClasses);
+	}
 	if (options.preserveFunctions) {
 		ATOMIC_RUNTIME.preserveFunctions = new Set(options.preserveFunctions);
 	}

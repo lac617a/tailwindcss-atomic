@@ -2,12 +2,13 @@ import postcss from "postcss";
 import type {Root as PostcssRoot} from "postcss";
 
 import {ATOMIC_RUNTIME} from "./shared/constants";
-import type {IgnoreCssPattern} from "./shared/constants";
+import type {IgnoreCssPattern, PreserveClassPattern} from "./shared/constants";
 import {applyAtomicCss, shouldIgnoreCss} from "./shared/css";
 import {invalidateJsModules} from "./shared/js";
 
 type PostcssAtomicOptions = {
 	ignoreCss?: IgnoreCssPattern[];
+	preserveClasses?: PreserveClassPattern[];
 };
 
 /**
@@ -19,6 +20,9 @@ type PostcssAtomicOptions = {
 export default function postcssTailwindAtomic(options: PostcssAtomicOptions = {}) {
 	if (options.ignoreCss?.length) {
 		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
+	}
+	if (options.preserveClasses?.length) {
+		ATOMIC_RUNTIME.preserveClasses.push(...options.preserveClasses);
 	}
 
 	return {

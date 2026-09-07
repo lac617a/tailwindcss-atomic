@@ -6,6 +6,11 @@ This crate is the engine behind [`tailwindcss-atomic`](https://www.npmjs.com/pac
 
 ## Usage
 
+```toml
+[dependencies]
+tailwind-atomic = "0.1"
+```
+
 ```rust
 use tailwind_atomic::{atomicize_stylesheet, rewrite_class_string, rewrite_html_classes};
 

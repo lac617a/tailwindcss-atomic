@@ -114,6 +114,14 @@ describe("factory plugin", () => {
 		expect(ATOMIC_RUNTIME.cssEntries).toContain("scss/styles.scss");
 	});
 
+	it("records preserveClasses", () => {
+		createPlugin({preserveClasses: ["text-logo", /^flex-container$/]});
+		expect(ATOMIC_RUNTIME.preserveClasses).toEqual([
+			"text-logo",
+			/^flex-container$/,
+		]);
+	});
+
 	it("filters transform ids", () => {
 		const plugin = createPlugin();
 		expect(plugin.transformInclude("")).toBe(false);

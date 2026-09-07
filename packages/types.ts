@@ -20,6 +20,12 @@ interface UnpluginFactoryOptions {
 	tailwindCss?: string;
 	transpilePackages?: string[];
 	ignoreCss?: Array<string | RegExp>;
+	/**
+	 * Class names that look like Tailwind utilities but must stay literal
+	 * (`.text-logo`, `.flex-container`). Strings match exactly; regexes test
+	 * the unescaped name.
+	 */
+	preserveClasses?: Array<string | RegExp>;
 	preserveFunctions?: Iterable<string>;
 	classMapFile?: string | boolean;
 	cssEntries?: string[];

@@ -116,6 +116,16 @@ describe("transformClassString", () => {
 		expect(transformClassString(" \n\t ", classMap)).toBe(" \n\t ");
 	});
 
+	it("does not rewrite preserveClasses even if they are in the map", () => {
+		ATOMIC_RUNTIME.preserveClasses.push("text-logo");
+		expect(
+			transformClassString("text-logo flex", {
+				"text-logo": "_ffffff",
+				flex: "_aaaaaa",
+			}),
+		).toBe("text-logo _aaaaaa");
+	});
+
 	it("falls back to unescaped keys", () => {
 		expect(
 			transformClassString("hover:bg-red-500", {
@@ -676,6 +686,53 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(code).not.toContain(".flex {");
 	});
 
+	it("leaves Tailwind-shaped custom classes listed in preserveClasses", () => {
+		ATOMIC_RUNTIME.preserveClasses.push("text-logo", /^flex-container$/);
+		const {code, changed} = applyAtomicCss(`
+.text-logo { color: #111 }
+.flex-container { display: flex; gap: 1rem }
+.flex { display: flex }
+`);
+		expect(changed).toBe(true);
+		expect(code).toContain(".text-logo");
+		expect(code).toContain(".flex-container");
+		expect(code).toContain("gap: 1rem");
+		expect(code).not.toContain(".flex {");
+		expect(ATOMIC_RUNTIME.classMap["text-logo"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex-container"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("discards a full-sheet WASM result that hashed preserveClasses", () => {
+		ATOMIC_RUNTIME.preserveClasses.push("text-logo");
+		wasmMock.impl = (css: string) => {
+			const class_map: Record<string, string> = {};
+			if (css.includes("text-logo")) {
+				class_map["text-logo"] = "_aaaaaa";
+			}
+			if (/(?:^|\{|\s)\.flex\b/.test(css) || css.includes(".flex {")) {
+				class_map.flex = "_bbbbbb";
+			}
+			return {
+				class_map,
+				css_rules: class_map.flex ? ["._bbbbbb { display: flex }"] : [],
+				css: css
+					.replaceAll(".text-logo", "._aaaaaa")
+					.replaceAll(".flex", "._bbbbbb"),
+				changed: true,
+			};
+		};
+		const {code, changed} = applyAtomicCss(`
+.text-logo { color: #111 }
+.flex { display: flex }
+`);
+		expect(changed).toBe(true);
+		expect(code).toContain(".text-logo");
+		expect(code).not.toContain("._aaaaaa");
+		expect(ATOMIC_RUNTIME.classMap["text-logo"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe("_bbbbbb");
+	});
+
 	it("keeps @supports color-mix utilities and rewrites from-primary/[0.05]", () => {
 		const {code, changed} = applyAtomicCss(`
 @supports (color:color-mix(in lab,red,red)) {
@@ -820,6 +877,13 @@ describe("looksLikeTailwindUtilityClass", () => {
 		]) {
 			expect(looksLikeTailwindUtilityClass(name)).toBe(false);
 		}
+	});
+
+	it("rejects names listed in preserveClasses", () => {
+		ATOMIC_RUNTIME.preserveClasses.push("text-logo", /^flex-container$/);
+		expect(looksLikeTailwindUtilityClass("text-logo")).toBe(false);
+		expect(looksLikeTailwindUtilityClass("flex-container")).toBe(false);
+		expect(looksLikeTailwindUtilityClass("flex")).toBe(true);
 	});
 });
 

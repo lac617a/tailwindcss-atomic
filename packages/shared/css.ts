@@ -423,6 +423,7 @@ function mergeClassMap(classMap: Record<string, string>) {
 		if (typeof value !== "string" || !value) continue;
 		const key = normalizeUtilityClassName(rawKey);
 		if (!key) continue;
+		if (isPreservedClassName(key) || isPreservedClassName(rawKey)) continue;
 		const prev = ATOMIC_RUNTIME.classMap[key];
 		if (!prev) {
 			ATOMIC_RUNTIME.classMap[key] = value;
@@ -538,8 +539,27 @@ function looksLikeHashedCssModuleClass(className: string) {
 
 function looksLikeTailwindUtilityClass(className: string) {
 	if (!className) return false;
+	if (isPreservedClassName(className)) return false;
 	if (looksLikeHashedCssModuleClass(className)) return false;
 	return looks_like_tailwind_utility(className);
+}
+
+function isPreservedClassName(className: string) {
+	if (!ATOMIC_RUNTIME.preserveClasses.length) return false;
+	const name = unescapeCssClassName(className);
+	for (const pattern of ATOMIC_RUNTIME.preserveClasses) {
+		if (typeof pattern === "string") {
+			if (name === pattern || className === pattern) return true;
+			continue;
+		}
+		pattern.lastIndex = 0;
+		if (pattern.test(name)) return true;
+		if (name !== className) {
+			pattern.lastIndex = 0;
+			if (pattern.test(className)) return true;
+		}
+	}
+	return false;
 }
 
 function looksLikeCssModuleClass(
@@ -580,11 +600,12 @@ function scanClassNameEnd(selector: string, start: number) {
 
 function firstClassToken(selector: string) {
 	for (let i = 0; i < selector.length; i++) {
+		const ch = selector[i];
 		if (ch === "\\") {
 			i += 1;
 			continue;
 		}
-		if (selector[i] === ".") {
+		if (ch === ".") {
 			const start = i + 1;
 			const end = scanClassNameEnd(selector, start);
 			if (end > start) return selector.slice(start, end);
@@ -842,6 +863,7 @@ function dedupeAtomicRules(root: PostcssRoot) {
 }
 
 function lookupMappedClass(cls: string, classMap: Record<string, string>) {
+	if (isPreservedClassName(cls)) return undefined;
 	return (
 		classMap[cls] ||
 		classMap[unescapeCssClassName(cls)] ||

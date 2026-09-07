@@ -55,7 +55,8 @@ La guía de uso de la librería está en [`packages/README.md`](packages/README.
 ```bash
 pnpm install
 pnpm build          # WASM + JavaScript
-pnpm test           # Vitest (packages/__test__)
+pnpm build:wasm     # required once before Vitest (`packages/pkg` is gitignored)
+pnpm test           # Vitest (packages/__test__); uses the real WASM grammar
 pnpm test:rust      # cargo test --workspace (crate + WASM bindings)
 pnpm test:coverage  # coverage lcov para Codecov
 pnpm dev            # Next 15 · http://localhost:3016

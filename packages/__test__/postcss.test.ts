@@ -40,6 +40,18 @@ describe("postcss plugin", () => {
 		expect(result.css).not.toContain(".flex {");
 	});
 
+	it("honors preserveClasses for Tailwind-shaped custom names", async () => {
+		const result = await postcss([
+			postcssTailwindAtomic({preserveClasses: ["text-logo"]}),
+		]).process(".text-logo { color: #111 } .flex { display: flex }", {
+			from: "src/app.css",
+		});
+		expect(result.css).toContain(".text-logo");
+		expect(result.css).not.toContain(".flex {");
+		expect(ATOMIC_RUNTIME.classMap["text-logo"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
 	it("leaves CSS without utilities unchanged", async () => {
 		const css = ":root { color: red }";
 		const result = await postcss([postcssTailwindAtomic()]).process(css, {

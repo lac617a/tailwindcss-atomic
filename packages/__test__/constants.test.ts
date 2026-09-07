@@ -53,6 +53,7 @@ describe("constants", () => {
 		expect(ATOMIC_RUNTIME.webpackWatchings).toBeInstanceOf(Set);
 		expect(ATOMIC_RUNTIME.transpilePackages).toBeInstanceOf(Set);
 		expect(ATOMIC_RUNTIME.ignoreCss).toBeInstanceOf(Array);
+		expect(ATOMIC_RUNTIME.preserveClasses).toBeInstanceOf(Array);
 		expect(ATOMIC_RUNTIME.preserveFunctions).toBeInstanceOf(Set);
 		expect(DEFAULT_PRESERVE_FUNCTIONS.has("twIgnore")).toBe(true);
 		expect(Array.isArray(ATOMIC_RUNTIME.projectRoots)).toBe(true);

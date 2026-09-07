@@ -224,6 +224,11 @@ describe("withTailwindAtomic", () => {
 		expect(config.outputFileTracingRoot).toBe("/tmp/app");
 	});
 
+	it("records preserveClasses", () => {
+		withTailwindAtomic({}, {preserveClasses: ["text-logo"]});
+		expect(ATOMIC_RUNTIME.preserveClasses).toContain("text-logo");
+	});
+
 	it("falls back to dist/loader.cjs when the source shim is missing", async () => {
 		const fs = await import("node:fs");
 		const path = await import("node:path");

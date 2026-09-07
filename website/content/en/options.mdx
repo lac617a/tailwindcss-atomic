@@ -18,6 +18,8 @@ type Options = {
   transpilePackages?: string[];
   /** Extra CSS that is not atomicized (on top of node_modules). */
   ignoreCss?: Array<string | RegExp>;
+  /** Class names that look like utilities but must stay literal. */
+  preserveClasses?: Array<string | RegExp>;
   /** Functions whose strings are left intact (default `twIgnore`). */
   preserveFunctions?: Iterable<string>;
   /** JSON inventory of the map. `false` disables it. */
@@ -66,6 +68,16 @@ tailwindAtomic({
 ## `ignoreCss`
 
 Skip atomicizing extra CSS besides `node_modules` (third-party sheets you import into the app bundle).
+
+## `preserveClasses`
+
+Leave class names that *look* like Tailwind utilities (`text-logo`, `flex-container`) as literals. Strings match exactly; regexes test the unescaped name.
+
+```ts
+withTailwindAtomic(nextConfig, {
+  preserveClasses: ["text-logo", /^flex-container$/],
+});
+```
 
 <Callout>
   The map is written so JS/HTML rewrite does not race PostCSS.

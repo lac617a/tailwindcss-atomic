@@ -314,6 +314,8 @@ type Options = {
 	transpilePackages?: string[];
 	/** CSS extra que no se atomiciza (además de node_modules). */
 	ignoreCss?: Array<string | RegExp>;
+	/** Clases con forma de utilidad que deben quedarse literales (`.text-logo`). */
+	preserveClasses?: Array<string | RegExp>;
 	/** Funciones cuyos strings se dejan intactos (por defecto `twIgnore`). */
 	preserveFunctions?: Iterable<string>;
 	/** Inventario JSON del mapa. `false` lo desactiva. */
@@ -337,7 +339,7 @@ withTailwindAtomic(nextConfig, {
 
 ## Qué se conserva
 
-El motor Rust (WASM) solo atomiciza reglas de utilidad. Se dejan intactos `@theme`, `:root`, preflight, `@keyframes` y at-rules anidadas (`@media`, `@supports`, `@container`).
+El motor Rust (WASM) solo atomiciza reglas de utilidad. Se dejan intactos `@theme`, `:root`, preflight, `@keyframes` y at-rules anidadas (`@media`, `@supports`, `@container`). Las clases custom sin forma de utilidad (`.header-signin`) se conservan; las que sí parecen utilidades (`text-logo`) van en `preserveClasses`.
 
 A diferencia de un rename 1:1, cada declaración se vuelve su propia clase; el resto del selector se **conserva** (`._hash:hover`, combinadores de `space-y-*`, el `@media` de `sm:`). Así no se pierde hover ni breakpoints.
 

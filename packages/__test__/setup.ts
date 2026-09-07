@@ -8,7 +8,6 @@ import {
 	processTailwindCss,
 	wasmMock,
 } from "./helpers";
-import {looksLikeTailwindUtility} from "./tailwind-grammar";
 import {clearLinkedPackageCache} from "../shared/js";
 
 const packagesRoot = path.resolve(
@@ -16,11 +15,25 @@ const packagesRoot = path.resolve(
 	"..",
 );
 const loaderStubPath = path.join(packagesRoot, "loader.cjs");
+const wasmArtifact = path.join(
+	packagesRoot,
+	"pkg",
+	"tailwind_atomic_wasm.js",
+);
 
-vi.mock("../core/wasm", () => ({
-	process_tailwind_css: (css: string) => processTailwindCss(css),
-	looks_like_tailwind_utility: looksLikeTailwindUtility,
-}));
+if (!fs.existsSync(wasmArtifact)) {
+	throw new Error(
+		"Missing packages/pkg. Run `pnpm build:wasm` before Vitest.",
+	);
+}
+
+vi.mock("../core/wasm", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../core/wasm.js")>();
+	return {
+		...actual,
+		process_tailwind_css: (css: string) => processTailwindCss(css),
+	};
+});
 
 if (!fs.existsSync(loaderStubPath)) {
 	fs.writeFileSync(
@@ -39,6 +52,7 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.targetFunctions = new Set(DEFAULT_TARGET_FUNCTIONS);
 	ATOMIC_RUNTIME.transpilePackages = new Set();
 	ATOMIC_RUNTIME.ignoreCss = [];
+	ATOMIC_RUNTIME.preserveClasses = [];
 	ATOMIC_RUNTIME.preserveFunctions = new Set(["twIgnore"]);
 	ATOMIC_RUNTIME.classMapFile = false;
 	ATOMIC_RUNTIME.cssEntries = [];

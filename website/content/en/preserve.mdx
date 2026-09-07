@@ -18,6 +18,8 @@ The Rust (WASM) engine only atomicizes **utility** rules. These stay as they are
 
 The rest of each selector is **kept**: `._hash:hover`, `space-y-*` combinators, the `@media` of `sm:`. Hover and breakpoints survive.
 
+Custom classes that are not Tailwind-shaped (`.header-signin`) stay intact. Names that *do* look like utilities (`text-logo`, `flex-container`) need `preserveClasses`.
+
 ## `twIgnore`
 
 Wrap strings that must not be rewritten:

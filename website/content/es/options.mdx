@@ -18,6 +18,8 @@ type Options = {
   transpilePackages?: string[];
   /** CSS extra que no se atomiciza (además de node_modules). */
   ignoreCss?: Array<string | RegExp>;
+  /** Clases con forma de utilidad que deben quedarse literales. */
+  preserveClasses?: Array<string | RegExp>;
   /** Funciones cuyos strings se dejan intactos (por defecto `twIgnore`). */
   preserveFunctions?: Iterable<string>;
   /** Inventario JSON del mapa. `false` lo desactiva. */
@@ -66,6 +68,16 @@ tailwindAtomic({
 ## `ignoreCss`
 
 Salta la atomicización de CSS extra además de `node_modules` (hojas de terceros que importas al bundle).
+
+## `preserveClasses`
+
+Deja literales nombres que *parecen* utilidades Tailwind (`text-logo`, `flex-container`). Los strings coinciden exactos; las regex prueban el nombre sin escapar.
+
+```ts
+withTailwindAtomic(nextConfig, {
+  preserveClasses: ["text-logo", /^flex-container$/],
+});
+```
 
 <Callout>
   El mapa se escribe para que el rewrite de JS/HTML no dependa de que PostCSS haya corrido antes.

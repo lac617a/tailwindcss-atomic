@@ -18,6 +18,8 @@ El motor Rust (WASM) solo atomiciza reglas de **utilidad**. Se conservan:
 
 El resto del selector se **conserva**: `._hash:hover`, combinadores de `space-y-*`, el `@media` de `sm:`. No se pierde hover ni breakpoints.
 
+Las clases custom que no tienen forma de utilidad (`.header-signin`) se dejan. Las que *sí* parecen utilidades (`text-logo`, `flex-container`) necesitan `preserveClasses`.
+
 ## `twIgnore`
 
 Envuelve strings que no deban tocarse:

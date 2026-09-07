@@ -6,8 +6,7 @@
 //! plugin prefix / bare word / `[arbitrary]`), which is enough to leave
 //! custom BEM-style classes like `.header-signin` or `.btn-notch` alone.
 //!
-//! Keep the prefix / bare lists in sync with the Vitest mock
-//! `packages/__test__/tailwind-grammar.ts`. This file is the source of truth.
+//! Vitest loads this classifier through WASM (`looks_like_tailwind_utility`).
 
 /// Bare utilities (no hyphen) from Tailwind's default theme.
 const BARE_UTILITIES: &[&str] = &[

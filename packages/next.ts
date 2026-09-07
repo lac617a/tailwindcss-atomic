@@ -149,6 +149,9 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 	if (options?.ignoreCss?.length) {
 		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
 	}
+	if (options?.preserveClasses?.length) {
+		ATOMIC_RUNTIME.preserveClasses.push(...options.preserveClasses);
+	}
 	if (options?.cssEntries?.length) {
 		ATOMIC_RUNTIME.cssEntries.push(...options.cssEntries);
 	}

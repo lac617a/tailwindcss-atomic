@@ -150,6 +150,21 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_r06001");
 	});
 
+	it("wraps cn(styles.*) without rewriting CSS module members", () => {
+		const result = transformJs(
+			`
+			import styles from "./nexi.module.css";
+			export default function Nexi({ className }) {
+				return <div className={cn(styles.nexi, styles.stIdle, className)} />;
+			}
+			`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toContain("styles.nexi");
+		expect(result.code).toContain("styles.stIdle");
+	});
+
 	it("rewrites jsx runtime props for className and class", () => {
 		const result = transformJs(
 			`

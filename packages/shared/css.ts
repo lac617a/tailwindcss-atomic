@@ -491,6 +491,21 @@ function countUnescapedClasses(selector: string) {
 	return selector.match(/(?<!\\)\.(?:\\.|[^\s.:#[\]>+~,])+/g)?.length ?? 0;
 }
 
+/**
+ * css-loader / Vite / Next default localIdent: `File_local__hash`.
+ * Arbitrary Tailwind values can contain `__` inside `[]`; those stay utilities.
+ */
+function looksLikeCssModuleClass(className: string) {
+	const name = unescapeCssClassName(className);
+	if (!name.includes("__")) return false;
+	if (name.includes("[") || name.includes(":")) return false;
+	return true;
+}
+
+function firstClassToken(selector: string) {
+	return selector.match(/(?<!\\)\.((?:\\.|[^\s.:#[\]>+~,])+)/)?.[1];
+}
+
 function isSingleUtilitySelector(selector: string) {
 	const sel = selector.trim();
 	if (!sel.includes(".")) return false;
@@ -504,6 +519,9 @@ function isSingleUtilitySelector(selector: string) {
 		if (hasNonUtilityCombinator(sel)) return false;
 		if (countUnescapedClasses(sel) !== 1) return false;
 	}
+
+	const token = firstClassToken(sel);
+	if (token && looksLikeCssModuleClass(token)) return false;
 
 	return true;
 }

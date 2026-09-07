@@ -81,6 +81,14 @@ for (const original in CLASS_MAP) {
 	}
 }
 
+function splitTokens(value) {
+	return value.split(/[\\s"']+/).filter(Boolean);
+}
+
+function isMappedToken(cls) {
+	return Boolean(CLASS_MAP[cls] || REVERSE_MAP[cls]);
+}
+
 function rewrite(value) {
 	if (value == null || value === false) return value;
 	if (typeof value !== "string") return value;
@@ -88,25 +96,44 @@ function rewrite(value) {
 	const trailing = value.match(/\\s*$/)?.[0] ?? "";
 	const mid = value.slice(leading.length, value.length - trailing.length);
 	if (!mid) return value;
-	const rewritten = mid
-		.split(/[\\s"']+/)
-		.filter(Boolean)
+	const rewritten = splitTokens(mid)
 		.map((cls) => CLASS_MAP[cls] || cls)
 		.join(" ");
 	return leading + rewritten + trailing;
 }
 
 function unhash(value) {
-	return value
-		.split(/[\\s"']+/)
-		.filter(Boolean)
+	return splitTokens(value)
 		.map((cls) => REVERSE_MAP[cls] || cls)
 		.join(" ");
 }
 
 function atomicReconcile(value) {
 	if (typeof value !== "string") return value;
-	return rewrite(twMerge(unhash(value)));
+	const leading = value.match(/^\\s*/)?.[0] ?? "";
+	const trailing = value.match(/\\s*$/)?.[0] ?? "";
+	const mid = value.slice(leading.length, value.length - trailing.length);
+	if (!mid) return value;
+	const tokens = splitTokens(mid);
+	const known = [];
+	const slots = [];
+	let placedKnown = false;
+	for (const cls of tokens) {
+		if (isMappedToken(cls)) {
+			known.push(cls);
+			if (!placedKnown) {
+				slots.push(null);
+				placedKnown = true;
+			}
+		} else {
+			slots.push(cls);
+		}
+	}
+	const merged = known.length
+		? rewrite(twMerge(unhash(known.join(" "))))
+		: "";
+	const parts = slots.map((slot) => (slot == null ? merged : slot)).filter(Boolean);
+	return leading + parts.join(" ") + trailing;
 }
 
 export { atomicReconcile, rewrite as atomicClassName };

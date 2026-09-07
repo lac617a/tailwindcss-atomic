@@ -461,6 +461,23 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		});
 	});
 
+	it("keeps CSS module locals and still atomicizes Tailwind utilities", () => {
+		const css = `
+.Nexi_nexi__abc12 { position: relative; width: 160px; height: 160px; }
+.Nexi_svg__def34 { display: block; width: 100%; height: 100%; }
+.flex { display: flex; }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(code).toContain(".Nexi_nexi__abc12");
+		expect(code).toContain(".Nexi_svg__def34");
+		expect(code).toContain("position: relative");
+		expect(ATOMIC_RUNTIME.classMap["Nexi_nexi__abc12"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["Nexi_svg__def34"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".flex {");
+	});
+
 	it("leaves vendor slick CSS untouched when from is node_modules", () => {
 		const slick = `
 .slick-slider { position: relative; display: block; }
@@ -553,6 +570,19 @@ describe("isUtilityRule", () => {
 		expect(
 			firstRule("[data-theme] { background-color: var(--x) }"),
 		).toBe(false);
+	});
+
+	it("rejects CSS module local idents so bundled modules stay intact", () => {
+		expect(
+			firstRule(".Nexi_nexi__abc12 { position: relative; width: 160px }"),
+		).toBe(false);
+		expect(
+			firstRule(".nexi_body__xK3p2 { fill: var(--fill); stroke: var(--ink) }"),
+		).toBe(false);
+		expect(
+			firstRule(".nexi-module__svg___tQf2a { display: block }"),
+		).toBe(false);
+		expect(firstRule(".w-\\[1fr__2fr\\] { width: 1fr }")).toBe(true);
 	});
 });
 

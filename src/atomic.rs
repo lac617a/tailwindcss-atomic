@@ -162,6 +162,16 @@ fn split_comma_selectors(selector: &str) -> Vec<&str> {
         .collect()
 }
 
+fn looks_like_css_module_class(class_name: &str) -> bool {
+    if !class_name.contains("__") {
+        return false;
+    }
+    if class_name.contains('\\') || class_name.contains('[') || class_name.contains(':') {
+        return false;
+    }
+    true
+}
+
 fn is_single_utility_selector(selector: &str) -> bool {
     let sel = selector.trim();
     if !sel.contains('.') {
@@ -181,6 +191,11 @@ fn is_single_utility_selector(selector: &str) -> bool {
             return false;
         }
         if count_unescaped_classes(sel) != 1 {
+            return false;
+        }
+    }
+    if let Some((_, raw)) = first_class_in_selector(sel) {
+        if looks_like_css_module_class(&raw) {
             return false;
         }
     }
@@ -532,6 +547,27 @@ mod tests {
             out.css
                 .contains(&format!(".{hashed} > :not([hidden]) ~ :not([hidden])"))
         );
+    }
+
+    #[test]
+    fn does_not_atomicize_css_module_locals() {
+        let out = atomicize_stylesheet(
+            ".Nexi_svg__def34 { display: block; width: 100% } .flex { display: flex }",
+        )
+        .unwrap();
+        assert!(out.css.contains(".Nexi_svg__def34"));
+        assert!(out.css.contains("display: block"));
+        assert!(out.class_map.get("Nexi_svg__def34").is_none());
+        assert!(out.class_map.get("flex").is_some());
+        assert!(!out.css.contains(".flex"));
+    }
+
+    #[test]
+    fn still_atomicizes_arbitrary_values_that_contain_underscores() {
+        let out = atomicize_stylesheet(".w-\\[1fr__2fr\\] { width: 1fr }").unwrap();
+        assert!(out.changed);
+        assert!(out.class_map.len() >= 1);
+        assert!(!out.css.contains("1fr__2fr") || out.css.contains("._"));
     }
 
     #[test]

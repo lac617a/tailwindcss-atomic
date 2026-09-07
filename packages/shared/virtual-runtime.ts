@@ -123,7 +123,26 @@ for (const original in CLASS_MAP) {
 }
 
 function splitTokens(value) {
-	return value.split(/[\\s"']+/).filter(Boolean);
+	const tokens = [];
+	let current = "";
+	let depth = 0;
+	for (let i = 0; i < value.length; i++) {
+		const ch = value[i];
+		if (ch === "\\\\" && i + 1 < value.length) {
+			current += ch + value[++i];
+			continue;
+		}
+		if (ch === "[") depth++;
+		else if (ch === "]" && depth) depth--;
+		if (!depth && /\\s/.test(ch)) {
+			if (current) tokens.push(current);
+			current = "";
+			continue;
+		}
+		current += ch;
+	}
+	if (current) tokens.push(current);
+	return tokens;
 }
 
 function isMappedToken(cls) {

@@ -788,6 +788,34 @@ function lookupMappedClass(cls: string, classMap: Record<string, string>) {
 	);
 }
 
+/**
+ * Split a className string on whitespace that is not inside `[…]`.
+ * Quotes in arbitrary values (`before:content-['']`) stay in the token.
+ */
+function splitClassTokens(value: string) {
+	const tokens: string[] = [];
+	let current = "";
+	let depth = 0;
+	for (let i = 0; i < value.length; i++) {
+		const ch = value[i];
+		if (ch === "\\" && i + 1 < value.length) {
+			current += ch + value[i + 1];
+			i += 1;
+			continue;
+		}
+		if (ch === "[") depth += 1;
+		else if (ch === "]" && depth > 0) depth -= 1;
+		if (depth === 0 && /\s/.test(ch)) {
+			if (current) tokens.push(current);
+			current = "";
+			continue;
+		}
+		current += ch;
+	}
+	if (current) tokens.push(current);
+	return tokens;
+}
+
 function transformClassString(
 	classStr: string,
 	classMap: Record<string, string>,
@@ -797,9 +825,7 @@ function transformClassString(
 	const trailing = classStr.match(/\s*$/)?.[0] ?? "";
 	const mid = classStr.slice(leading.length, classStr.length - trailing.length);
 	if (!mid) return classStr;
-	const rewritten = mid
-		.split(/[\s"']+/)
-		.filter(Boolean)
+	const rewritten = splitClassTokens(mid)
 		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
 	return `${leading}${rewritten}${trailing}`;

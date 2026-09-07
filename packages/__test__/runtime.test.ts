@@ -65,4 +65,13 @@ describe("atomicReconcile runtime", () => {
 			"_aaaaaa _bbbbbb my-widget",
 		);
 	});
+
+	it("keeps before/after content tokens that contain quotes", () => {
+		ATOMIC_RUNTIME.classMap["before:content-['']"] = "_bemp01";
+		ATOMIC_RUNTIME.classMap["after:content-['*']"] = "_astar1";
+		const {atomicReconcile} = instantiateRuntime(generateRuntimeModule());
+		expect(atomicReconcile("before:content-[''] after:content-['*']")).toBe(
+			"_bemp01 _astar1",
+		);
+	});
 });

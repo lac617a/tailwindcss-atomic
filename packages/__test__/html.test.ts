@@ -59,4 +59,12 @@ describe("transformHtml", () => {
 			'<div class="_aaaaaa _bbbbbb" className="_aaaaaa" id="flex"></div>',
 		);
 	});
+
+	it("rewrites before/after content classes that contain quotes", () => {
+		ATOMIC_RUNTIME.classMap["before:content-['']"] = "_bemp01";
+		ATOMIC_RUNTIME.classMap["after:content-['*']"] = "_astar1";
+		expect(
+			transformHtml(`<i class="before:content-[''] after:content-['*']"></i>`),
+		).toBe('<i class="_bemp01 _astar1"></i>');
+	});
 });

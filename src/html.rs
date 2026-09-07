@@ -92,4 +92,18 @@ mod tests {
             r#"<div class="_aaaaaa _bbbbbb" className="_aaaaaa" id="flex"></div>"#
         );
     }
+
+    #[test]
+    fn rewrites_before_after_content_classes() {
+        let mut map = HashMap::new();
+        map.insert("before:content-['']".into(), "_bemp01".into());
+        map.insert("after:content-['*']".into(), "_astar1".into());
+        assert_eq!(
+            rewrite_html_classes(
+                r#"<i class="before:content-[''] after:content-['*']"></i>"#,
+                &map
+            ),
+            r#"<i class="_bemp01 _astar1"></i>"#
+        );
+    }
 }

@@ -708,6 +708,57 @@ mod tests {
     }
 
     #[test]
+    fn atomicizes_before_and_after_pseudo_elements() {
+        let out = atomicize_stylesheet(
+            r#"
+.before\:block::before { content: var(--tw-content); display: block }
+.after\:content-\[\'\'\]::after { content: var(--tw-content); content: "" }
+.before\:absolute { &::before { content: var(--tw-content); position: absolute } }
+.after\:inset-0 { &::after { content: var(--tw-content); inset: 0px } }
+"#,
+        )
+        .unwrap();
+
+        let first_hash = |key: &str| {
+            out.class_map
+                .get(key)
+                .expect(key)
+                .split_whitespace()
+                .next()
+                .expect("hash")
+        };
+
+        let before_block = first_hash("before:block");
+        let after_content = first_hash("after:content-['']");
+        let before_abs = first_hash("before:absolute");
+        let after_inset = first_hash("after:inset-0");
+
+        assert!(
+            out.css.contains(&format!(".{before_block}:before")),
+            "flat before:block css: {}",
+            out.css
+        );
+        assert!(
+            out.css.contains(&format!(".{after_content}:after")),
+            "flat after:content css: {}",
+            out.css
+        );
+        assert!(
+            out.css.contains(&format!(".{before_abs}:before")),
+            "nested before:absolute css: {}",
+            out.css
+        );
+        assert!(
+            out.css.contains(&format!(".{after_inset}:after")),
+            "nested after:inset-0 css: {}",
+            out.css
+        );
+        assert!(!out.css.contains(".before\\:block"));
+        assert!(!out.css.contains(".after\\:content-"));
+        assert!(!out.css.contains(".before\\:absolute"));
+    }
+
+    #[test]
     fn atomicizes_nested_lg_hover_flex() {
         let out = atomicize_stylesheet(
             r#"

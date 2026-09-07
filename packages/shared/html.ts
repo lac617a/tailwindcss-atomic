@@ -38,7 +38,7 @@ function transformHtml(html: string) {
 	}
 
 	return html.replace(
-		/(?<![A-Za-z0-9_-])(class(?:Name)?)\s*=\s*(["'])([^"']*)\2/gi,
+		/(?<![A-Za-z0-9_-])(class(?:Name)?)\s*=\s*(["'])((?:(?!\2)[\s\S])*)\2/gi,
 		(_match, attr: string, quote: string, value: string) => {
 			return `${attr}=${quote}${transformClassString(value, ATOMIC_RUNTIME.classMap)}${quote}`;
 		},

@@ -137,6 +137,26 @@ describe("transformClassString", () => {
 			}),
 		).toBe("_imp001 _dis001 _hex001");
 	});
+
+	it("keeps quoted before/after content arbitrary values as one token", () => {
+		expect(
+			transformClassString(
+				"relative before:absolute before:content-[''] after:content-['*']",
+				{
+					relative: "_rel001",
+					"before:absolute": "_babs01",
+					"before:content-['']": "_bemp01",
+					"after:content-['*']": "_astar1",
+				},
+			),
+		).toBe("_rel001 _babs01 _bemp01 _astar1");
+		expect(
+			transformClassString("before:content-['hello world'] flex", {
+				"before:content-['hello world']": "_bhello",
+				flex: "_aaaaaa",
+			}),
+		).toBe("_bhello _aaaaaa");
+	});
 });
 
 describe("mergeClassMap", () => {
@@ -196,6 +216,31 @@ describe("applyAtomicCss", () => {
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 		expect(code).not.toContain(".flex {");
+	});
+
+	it("atomicizes before/after utilities and keeps the pseudo-element on the hashed selector", () => {
+		const css = `
+.before\\:block::before { content: var(--tw-content); display: block }
+.after\\:content-\\[\\'\\'\\]::after { content: "" }
+.flex { display: flex }
+`;
+		const {code, changed} = applyAtomicCss(css);
+		expect(changed).toBe(true);
+		expect(ATOMIC_RUNTIME.classMap["before:block"]).toMatch(/^_[0-9a-f]{6}/);
+		expect(ATOMIC_RUNTIME.classMap["after:content-['']"]).toMatch(
+			/^_[0-9a-f]{6}/,
+		);
+		const beforeHash = ATOMIC_RUNTIME.classMap["before:block"]?.split(" ")[0];
+		expect(code).toContain(`${beforeHash}::before`);
+		expect(code).not.toContain(".before\\:block");
+		const js = transformClassString(
+			"before:block after:content-['']",
+			ATOMIC_RUNTIME.classMap,
+		);
+		expect(js).toContain(ATOMIC_RUNTIME.classMap["before:block"]);
+		expect(js).toContain(ATOMIC_RUNTIME.classMap["after:content-['']"]);
+		expect(js).not.toContain("before:");
+		expect(js).not.toContain("after:");
 	});
 
 	it("flattens @layer wrappers before atomicizing utilities", () => {

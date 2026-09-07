@@ -136,17 +136,50 @@ pub fn lookup_mapped_class<'a>(
     class_map.get(&normalized).map(String::as_str)
 }
 
-/// Split on whitespace / quotes
-/// and replace known utilities. Longer keys win when a token could match two
+/// Split Tailwind class lists on whitespace outside `[…]`.
+/// Quotes inside arbitrary values (`before:content-['']`) are part of the token.
+pub fn split_class_tokens(class_str: &str) -> Vec<&str> {
+    let bytes = class_str.as_bytes();
+    let mut tokens = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    let mut depth = 0i32;
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        if b == b'[' {
+            depth += 1;
+        } else if b == b']' && depth > 0 {
+            depth -= 1;
+        }
+        if depth == 0 && bytes[i].is_ascii_whitespace() {
+            if i > start {
+                tokens.push(&class_str[start..i]);
+            }
+            i += 1;
+            start = i;
+            continue;
+        }
+        i += 1;
+    }
+    if i > start {
+        tokens.push(&class_str[start..i]);
+    }
+    tokens
+}
+
+/// Replace known utilities. Longer keys win when a token could match two
 /// map entries (`bg-red-500/50` before `bg-red-500`).
 pub fn rewrite_class_string(class_str: &str, class_map: &HashMap<String, String>) -> String {
     if class_str.is_empty() || class_map.is_empty() {
         return class_str.to_string();
     }
 
-    class_str
-        .split(|ch: char| ch.is_whitespace() || ch == '"' || ch == '\'')
-        .filter(|token| !token.is_empty())
+    split_class_tokens(class_str)
+        .into_iter()
         .map(|token| {
             lookup_mapped_class(token, class_map)
                 .unwrap_or(token)
@@ -183,6 +216,22 @@ mod tests {
         assert_eq!(
             rewrite_class_string("flex extra hover:bg-red-500", &map),
             "_aaaaaa extra _bbbbbb"
+        );
+    }
+
+    #[test]
+    fn keeps_quoted_arbitrary_content_on_before_after() {
+        let mut map = HashMap::new();
+        map.insert("before:content-['']".into(), "_before".into());
+        map.insert("after:content-['*']".into(), "_after".into());
+        map.insert("before:absolute".into(), "_abs".into());
+        assert_eq!(
+            rewrite_class_string("before:absolute before:content-[''] after:content-['*']", &map),
+            "_abs _before _after"
+        );
+        assert_eq!(
+            split_class_tokens("before:content-['hello world'] flex"),
+            vec!["before:content-['hello world']", "flex"]
         );
     }
 }

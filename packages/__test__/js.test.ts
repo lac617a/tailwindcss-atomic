@@ -85,6 +85,21 @@ describe("transformJs", () => {
 		expect(result.code).not.toContain("flex p-6");
 	});
 
+	it("rewrites before/after content classNames without splitting on quotes", () => {
+		ATOMIC_RUNTIME.classMap["before:content-['']"] = "_bemp01";
+		ATOMIC_RUNTIME.classMap["after:content-['']"] = "_aemp01";
+		ATOMIC_RUNTIME.classMap["before:absolute"] = "_babs01";
+		const result = transformJs(
+			`export const n = <i className="before:absolute before:content-[''] after:content-['']" />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_babs01");
+		expect(result.code).toContain("_bemp01");
+		expect(result.code).toContain("_aemp01");
+		expect(result.code).not.toContain("before:content-[");
+		expect(result.code).not.toContain("after:content-[");
+	});
+
 	it("rewrites JSX className expressions", () => {
 		const result = transformJs(
 			`export const n = <div className={"flex"} />;`,

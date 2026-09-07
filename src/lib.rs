@@ -1,6 +1,7 @@
 mod atomic;
 mod classes;
 mod html;
+mod tailwind;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;

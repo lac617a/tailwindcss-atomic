@@ -5,6 +5,7 @@ import {
 	applyAtomicCss,
 	atomicizeContainer,
 	isUtilityRule,
+	looksLikeTailwindUtilityClass,
 	collectSearchRoots,
 	findCssEntries,
 	findCssEntry,
@@ -619,6 +620,24 @@ html:root, [data-theme] { background-color: var(--color-revamp-neutral-bg-surfac
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(app.code).not.toMatch(/\.slick-/);
 	});
+
+	it("leaves custom hyphenated component classes intact", () => {
+		const {code, changed} = applyAtomicCss(`
+.header-signin { color: red }
+.btn-notch { display: flex }
+.flex { display: flex }
+.p-4 { padding: 1rem }
+`);
+		expect(changed).toBe(true);
+		expect(code).toContain(".header-signin");
+		expect(code).toContain(".btn-notch");
+		expect(code).toContain("color: red");
+		expect(ATOMIC_RUNTIME.classMap["header-signin"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["btn-notch"]).toBeUndefined();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(code).not.toContain(".flex {");
+	});
 });
 
 describe("atomicizeContainer", () => {
@@ -693,6 +712,46 @@ describe("isUtilityRule", () => {
 			firstRule(".nexi-module__svg___tQf2a { display: block }"),
 		).toBe(false);
 		expect(firstRule(".w-\\[1fr__2fr\\] { width: 1fr }")).toBe(true);
+	});
+
+	it("rejects custom hyphenated component classes", () => {
+		expect(firstRule(".header-signin { color: red }")).toBe(false);
+		expect(firstRule(".btn-notch { display: flex }")).toBe(false);
+		expect(firstRule(".eye-line { width: 1px }")).toBe(false);
+		expect(firstRule(".slick-slide { display: none }")).toBe(false);
+		expect(firstRule(".pattern-background { position: relative }")).toBe(false);
+	});
+});
+
+describe("looksLikeTailwindUtilityClass", () => {
+	it("accepts Tailwind-shaped names including theme tokens and variants", () => {
+		for (const name of [
+			"flex",
+			"p-4",
+			"-mt-2",
+			"items-center",
+			"bg-revamp-primary-default",
+			"hover:bg-red-500",
+			"before:content-['']",
+			"w-[327px]",
+			"sr-only",
+			"min-h-screen",
+			"!px-4",
+		]) {
+			expect(looksLikeTailwindUtilityClass(name)).toBe(true);
+		}
+	});
+
+	it("rejects BEM-style classes that only happen to contain a hyphen", () => {
+		for (const name of [
+			"header-signin",
+			"btn-notch",
+			"eye-line",
+			"pokerenchile",
+			"hover:header-signin",
+		]) {
+			expect(looksLikeTailwindUtilityClass(name)).toBe(false);
+		}
 	});
 });
 

@@ -6,6 +6,7 @@ use lightningcss::stylesheet::{ParserFlags, ParserOptions, PrinterOptions, Style
 use lightningcss::traits::ToCss;
 
 use crate::classes::normalize_utility_class_name;
+use crate::tailwind::looks_like_tailwind_utility;
 
 const TAILWIND_PSEUDO_ELEMENTS: &[&str] = &[
     "::-webkit-input-placeholder",
@@ -242,13 +243,25 @@ fn looks_like_css_module_class(class_name: &str) -> bool {
     true
 }
 
+fn class_token_is_tailwind_utility(selector: &str) -> bool {
+    match first_class_in_selector(selector) {
+        Some((_, raw)) => {
+            if looks_like_css_module_class(&raw) {
+                return false;
+            }
+            looks_like_tailwind_utility(&raw)
+        }
+        None => false,
+    }
+}
+
 fn is_single_utility_selector(selector: &str) -> bool {
     let sel = selector.trim();
     if !sel.contains('.') {
         return false;
     }
     if is_tailwind_space_or_divide_selector(sel) {
-        return true;
+        return class_token_is_tailwind_utility(sel);
     }
     if !has_tailwind_variant_escape(sel) {
         if is_document_or_theme_root_selector(sel) {
@@ -264,12 +277,7 @@ fn is_single_utility_selector(selector: &str) -> bool {
             return false;
         }
     }
-    if let Some((_, raw)) = first_class_in_selector(sel) {
-        if looks_like_css_module_class(&raw) {
-            return false;
-        }
-    }
-    true
+    class_token_is_tailwind_utility(sel)
 }
 
 pub fn is_utility_selector(selector: &str) -> bool {
@@ -844,7 +852,6 @@ mod tests {
             (".flex{display:flex}", "flex"),
             (".w-\\[calc\\(100px\\)\\]{width:calc(100px)}", "w-[calc(100px)]"),
             (".\\[color\\:red\\]{color:red}", "[color:red]"),
-            (".a\\,b{color:red}", "a,b"),
             (
                 ".transition-\\[color\\,box-shadow\\]{transition-property:color,box-shadow}",
                 "transition-[color,box-shadow]",
@@ -875,5 +882,44 @@ mod tests {
             );
             assert!(out.changed, "expected change for {css}");
         }
+
+        let custom = atomicize_stylesheet(".a\\,b{color:red}").unwrap();
+        assert!(
+            custom.class_map.get("a,b").is_none(),
+            "escaped-comma custom class must not be hashed"
+        );
+        assert!(custom.css.contains(".a\\,b") || custom.css.contains("a\\,b"));
+    }
+
+    #[test]
+    fn preserves_custom_hyphenated_component_classes() {
+        let out = atomicize_stylesheet(
+            r#"
+.header-signin { color: red }
+.btn-notch { display: flex }
+.eye-line { width: 1px }
+.flex { display: flex }
+.p-4 { padding: 1rem }
+.items-center { align-items: center }
+.bg-revamp-primary-default { background-color: var(--x) }
+.before\:content-\[\'\'\]::before { content: var(--tw-content); content: "" }
+"#,
+        )
+        .unwrap();
+
+        assert!(out.css.contains(".header-signin"));
+        assert!(out.css.contains(".btn-notch"));
+        assert!(out.css.contains(".eye-line"));
+        assert!(out.class_map.get("header-signin").is_none());
+        assert!(out.class_map.get("btn-notch").is_none());
+        assert!(out.class_map.get("eye-line").is_none());
+
+        assert!(out.class_map.get("flex").is_some());
+        assert!(out.class_map.get("p-4").is_some());
+        assert!(out.class_map.get("items-center").is_some());
+        assert!(out.class_map.get("bg-revamp-primary-default").is_some());
+        assert!(out.class_map.get("before:content-['']").is_some());
+        assert!(!out.css.contains(".flex {"));
+        assert!(!out.css.contains(".p-4 {"));
     }
 }

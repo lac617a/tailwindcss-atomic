@@ -92,6 +92,17 @@ function rewritePreserveModulesRuntime(bundle: OutputBundle) {
 	}
 }
 
+function unhashBundleJs(bundle: OutputBundle, targetFunctions: Set<string>) {
+	for (const file of Object.values(bundle)) {
+		if (file.type !== "chunk" || typeof file.code !== "string") continue;
+		const result = transformJs(file.code, targetFunctions, {
+			unhash: true,
+			runtimeImport: false,
+		});
+		if (result.code) file.code = result.code;
+	}
+}
+
 function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
 	for (const file of Object.values(bundle)) {
 		if (file.type === "asset" && file.fileName.endsWith(".css")) {
@@ -269,6 +280,14 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 	}
 
 	const transformEmittedJs = options.transformEmittedJs === true;
+	const libraryMode = options.library === true;
+	const disableLibraryMode = options.library === false;
+
+	function isLibraryOutput(output?: RollupOutputOptions) {
+		if (disableLibraryMode) return false;
+		if (libraryMode) return true;
+		return output?.preserveModules === true;
+	}
 
 	// Opcional: pre-cargar el mapa si alguien todavía pasa CSS compilado.
 	if (options.tailwindCss) {
@@ -330,6 +349,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			await warmupClassMapFromCss();
 
 			if (isCssFile(id)) {
+				if (libraryMode) return null;
 				if (shouldIgnoreCss(id)) return null;
 				// Vite already wrapped the file in the HMR injector (`updateStyle`).
 				// Parsing that JS as CSS wipes the stylesheet → página en blanco y negro.
@@ -343,6 +363,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			}
 
 			if (isJsFile(id)) {
+				if (libraryMode) return null;
 				const result = transformJs(code, targetFunctions);
 				if (!result.code) return null;
 				return result;
@@ -391,9 +412,11 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 		},
 
 		rollup: {
-			generateBundle(options: RollupOutputOptions, bundle) {
-				if (options?.preserveModules) {
+			generateBundle(output: RollupOutputOptions, bundle) {
+				if (isLibraryOutput(output)) {
 					rewritePreserveModulesRuntime(bundle);
+					unhashBundleJs(bundle, targetFunctions);
+					return;
 				}
 				rewriteBundle(bundle, targetFunctions);
 			},

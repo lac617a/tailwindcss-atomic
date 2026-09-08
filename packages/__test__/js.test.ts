@@ -403,6 +403,24 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_twAtomicReconcile(cn(");
 		expect(result.code).toMatch(/atomicReconcile as _twAtomicReconcile/);
 	});
+
+	it("unhashes library output so the consuming app can generate CSS", () => {
+		ATOMIC_RUNTIME.classMap["bg-neutral-300"] = "_ce2951";
+		ATOMIC_RUNTIME.classMap["bg-opacity-50"] = "_983484";
+		ATOMIC_RUNTIME.classMap["rounded-lg"] = "_9e0aea";
+		const result = transformJs(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";\ncx("ui-latamwin-skeleton-item _9e0aea _983484 _ce2951");`,
+			new Set(["cx"]),
+			{unhash: true},
+		);
+		expect(result.code).toContain(
+			"ui-latamwin-skeleton-item rounded-lg bg-opacity-50 bg-neutral-300",
+		);
+		expect(result.code).not.toContain("_ce2951");
+		expect(result.code).not.toContain("_twAtomicReconcile");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+		expect(result.code).toContain("cx(");
+	});
 });
 
 describe("invalidateJsModules", () => {

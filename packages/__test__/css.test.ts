@@ -20,6 +20,8 @@ import {
 	rehydrateClassMapFromCss,
 	stripSassModuleRules,
 	transformClassString,
+	reverseClassMap,
+	unhashClassString,
 } from "../shared/css";
 import {defaultProcessTailwindCss, wasmMock} from "./helpers";
 
@@ -167,6 +169,24 @@ describe("transformClassString", () => {
 				flex: "_aaaaaa",
 			}),
 		).toBe("_bhello _aaaaaa");
+	});
+});
+
+describe("unhashClassString", () => {
+	it("restores original utilities and collapses split decls", () => {
+		const reverse = reverseClassMap({
+			"bg-neutral-300": "_ce2951 _color01",
+			"bg-opacity-50": "_983484",
+			"rounded-lg": "_9e0aea",
+		});
+		expect(
+			unhashClassString(
+				"ui-latamwin-skeleton-item _9e0aea _983484 _ce2951 _color01",
+				reverse,
+			),
+		).toBe(
+			"ui-latamwin-skeleton-item rounded-lg bg-opacity-50 bg-neutral-300",
+		);
 	});
 });
 

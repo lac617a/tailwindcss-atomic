@@ -903,6 +903,38 @@ function transformClassString(
 	return `${leading}${rewritten}${trailing}`;
 }
 
+function reverseClassMap(classMap: Record<string, string>) {
+	const reverse: Record<string, string> = Object.create(null);
+	for (const [original, hashes] of Object.entries(toPlainMap(classMap))) {
+		if (typeof hashes !== "string" || !hashes) continue;
+		for (const hash of splitClassTokens(hashes)) {
+			if (hash) reverse[hash] = original;
+		}
+	}
+	return reverse;
+}
+
+/**
+ * Restore original utilities from hashed tokens. Consecutive hashes that
+ * belong to the same utility (`bg-neutral-300` → `_aaa _bbb`) collapse.
+ */
+function unhashClassString(
+	classStr: string,
+	reverse: Record<string, string>,
+) {
+	if (!classStr) return classStr;
+	const leading = classStr.match(/^\s*/)?.[0] ?? "";
+	const trailing = classStr.match(/\s*$/)?.[0] ?? "";
+	const mid = classStr.slice(leading.length, classStr.length - trailing.length);
+	if (!mid) return classStr;
+	const tokens: string[] = [];
+	for (const cls of splitClassTokens(mid)) {
+		const next = reverse[cls] || cls;
+		if (tokens[tokens.length - 1] !== next) tokens.push(next);
+	}
+	return `${leading}${tokens.join(" ")}${trailing}`;
+}
+
 function posixCssPath(from: string) {
 	return from.split("?")[0]?.replace(/\\/g, "/") ?? "";
 }
@@ -1412,6 +1444,8 @@ export {
 	normalizeUtilityClassName,
 	shouldIgnoreCss,
 	transformClassString,
+	reverseClassMap,
+	unhashClassString,
 	warmupClassMapFromCss,
 	collectSearchRoots,
 	findCssEntry,

@@ -36,6 +36,12 @@ interface UnpluginFactoryOptions {
 	 * When enabled, JS is still skipped unless the compilation emits ESM.
 	 */
 	transformEmittedJs?: boolean;
+	/**
+	 * Design-system builds (`preserveModules` UI packages). Leave original
+	 * Tailwind class names in JS so the consuming app can generate CSS and
+	 * hash. Default: auto — on when Rollup `preserveModules` is set.
+	 */
+	library?: boolean;
 }
 
 type UnpluginFactoryFunction = Partial<UnpluginFactory<UnpluginFactoryOptions>>;

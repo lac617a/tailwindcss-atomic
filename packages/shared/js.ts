@@ -8,7 +8,11 @@ import type {Node} from "@babel/types";
 import type {NodePath} from "@babel/traverse";
 
 import {ATOMIC_RUNTIME} from "./constants";
-import {transformClassString} from "./css";
+import {
+	reverseClassMap,
+	transformClassString,
+	unhashClassString,
+} from "./css";
 import {isAstroFile} from "./html";
 import {getCalleeName} from "./utils";
 import {processArgument, processCvaCall} from "../core/process";
@@ -176,15 +180,26 @@ function invalidateJsModules() {
  * `var classNameDefault = ["flex", "items-center"]; cva(classNameDefault, …)`.
  * Follow the binding and rewrite mapped class strings in arrays/objects.
  */
+function rewriteClassValue(
+	value: string,
+	classMap: Record<string, string>,
+	unhash: boolean,
+) {
+	return unhash
+		? unhashClassString(value, classMap)
+		: transformClassString(value, classMap);
+}
+
 function rewriteMappedClassNode(
 	node: Node | null | undefined,
 	classMap: Record<string, string>,
+	unhash = false,
 ): boolean {
 	if (!node) return false;
 
 	switch (node.type) {
 		case "StringLiteral": {
-			const next = transformClassString(node.value, classMap);
+			const next = rewriteClassValue(node.value, classMap, unhash);
 			if (next === node.value) return false;
 			node.value = next;
 			return true;
@@ -192,7 +207,7 @@ function rewriteMappedClassNode(
 		case "ArrayExpression": {
 			let changed = false;
 			for (const el of node.elements) {
-				if (el && rewriteMappedClassNode(el, classMap)) changed = true;
+				if (el && rewriteMappedClassNode(el, classMap, unhash)) changed = true;
 			}
 			return changed;
 		}
@@ -207,19 +222,19 @@ function rewriteMappedClassNode(
 					key = prop.key.value;
 				}
 				if (key === "defaultVariants") continue;
-				if (rewriteMappedClassNode(prop.value, classMap)) changed = true;
+				if (rewriteMappedClassNode(prop.value, classMap, unhash)) changed = true;
 			}
 			return changed;
 		}
 		case "TemplateLiteral":
 			return processArgument(node, classMap);
 		case "ConditionalExpression": {
-			const a = rewriteMappedClassNode(node.alternate, classMap);
-			const b = rewriteMappedClassNode(node.consequent, classMap);
+			const a = rewriteMappedClassNode(node.alternate, classMap, unhash);
+			const b = rewriteMappedClassNode(node.consequent, classMap, unhash);
 			return a || b;
 		}
 		case "LogicalExpression":
-			return rewriteMappedClassNode(node.right, classMap);
+			return rewriteMappedClassNode(node.right, classMap, unhash);
 		case "ParenthesizedExpression":
 		case "TSAsExpression":
 		case "TSSatisfiesExpression":
@@ -228,6 +243,7 @@ function rewriteMappedClassNode(
 			return rewriteMappedClassNode(
 				(node as {expression: Node | null}).expression,
 				classMap,
+				unhash,
 			);
 		default:
 			return false;
@@ -237,12 +253,13 @@ function rewriteMappedClassNode(
 function rewriteBoundClassName(
 	argPath: NodePath,
 	classMap: Record<string, string>,
+	unhash = false,
 ): boolean {
 	if (!argPath.isIdentifier()) return false;
 	const binding = argPath.scope.getBinding(argPath.node.name);
 	if (!binding?.path.isVariableDeclarator()) return false;
 	const init = binding.path.node.init;
-	return rewriteMappedClassNode(init, classMap);
+	return rewriteMappedClassNode(init, classMap, unhash);
 }
 
 function alreadyReconciled(path: NodePath) {
@@ -398,8 +415,40 @@ function injectRuntimeImport(
 	return true;
 }
 
+function stripRuntimeImports(ast: {program: {body: Node[]}}) {
+	const body = ast.program.body;
+	let removed = false;
+	for (let i = body.length - 1; i >= 0; i--) {
+		const node = body[i];
+		if (
+			node &&
+			node.type === "ImportDeclaration" &&
+			isRuntimeModuleSource(node.source.value)
+		) {
+			body.splice(i, 1);
+			removed = true;
+			continue;
+		}
+		if (node && node.type === "VariableDeclaration") {
+			const next = node.declarations.filter(
+				(decl) => !isRequireRuntimeCall(decl.init),
+			);
+			if (next.length !== node.declarations.length) {
+				if (!next.length) {
+					body.splice(i, 1);
+				} else {
+					node.declarations = next;
+				}
+				removed = true;
+			}
+		}
+	}
+	return removed;
+}
+
 type TransformJsOptions = {
 	runtimeImport?: RuntimeImportKind | false;
+	unhash?: boolean;
 };
 
 function transformJs(
@@ -407,7 +456,9 @@ function transformJs(
 	targetFunctions: Set<string>,
 	options?: TransformJsOptions,
 ) {
-	if (!code || Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
+	const unhash = options?.unhash === true;
+	if (!code) return {code: null, map: null};
+	if (!unhash && Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {
 		return {code: null, map: null};
 	}
 
@@ -419,7 +470,9 @@ function transformJs(
 
 		let hasModifications = false;
 		let needsRuntime = false;
-		const classMap = ATOMIC_RUNTIME.classMap;
+		const classMap = unhash
+			? reverseClassMap(ATOMIC_RUNTIME.classMap)
+			: ATOMIC_RUNTIME.classMap;
 
 		traverse(ast, {
 			JSXAttribute(path) {
@@ -429,9 +482,10 @@ function transformJs(
 				if (name !== "className" && name !== "class") return;
 
 				if (path.node.value && path.node.value.type === "StringLiteral") {
-					const next = transformClassString(
+					const next = rewriteClassValue(
 						path.node.value.value,
 						classMap,
+						unhash,
 					);
 					if (next !== path.node.value.value) {
 						path.node.value.value = next;
@@ -462,20 +516,26 @@ function transformJs(
 							hasModifications = true;
 						}
 						for (const arg of path.get("arguments")) {
-							if (rewriteBoundClassName(arg, classMap)) {
+							if (rewriteBoundClassName(arg, classMap, unhash)) {
 								hasModifications = true;
 							}
 							if (!arg.isObjectExpression()) continue;
 							for (const prop of arg.get("properties")) {
 								if (!prop.isObjectProperty()) continue;
 								const value = prop.get("value");
-								if (rewriteBoundClassName(value, classMap)) {
+								if (rewriteBoundClassName(value, classMap, unhash)) {
 									hasModifications = true;
 								}
 								if (!value.isObjectExpression()) continue;
 								for (const nested of value.get("properties")) {
 									if (!nested.isObjectProperty()) continue;
-									if (rewriteBoundClassName(nested.get("value"), classMap)) {
+									if (
+										rewriteBoundClassName(
+											nested.get("value"),
+											classMap,
+											unhash,
+										)
+									) {
 										hasModifications = true;
 									}
 								}
@@ -486,7 +546,7 @@ function transformJs(
 							if (processArgument(arg.node, classMap)) {
 								hasModifications = true;
 							}
-							if (rewriteBoundClassName(arg, classMap)) {
+							if (rewriteBoundClassName(arg, classMap, unhash)) {
 								hasModifications = true;
 							}
 						});
@@ -522,6 +582,17 @@ function transformJs(
 				},
 				exit(path) {
 					const funcName = getCalleeName(path.node.callee);
+					if (unhash) {
+						if (
+							isReconcileWrapperName(funcName) &&
+							path.node.arguments.length === 1 &&
+							path.node.arguments[0]
+						) {
+							path.replaceWith(path.node.arguments[0]);
+							hasModifications = true;
+						}
+						return;
+					}
 					if (funcName === RUNTIME_FN) {
 						needsRuntime = true;
 						return;
@@ -539,7 +610,7 @@ function transformJs(
 			},
 
 			VariableDeclarator(path) {
-				if (rewriteMappedClassNode(path.node.init, classMap)) {
+				if (rewriteMappedClassNode(path.node.init, classMap, unhash)) {
 					hasModifications = true;
 				}
 			},
@@ -551,20 +622,29 @@ function transformJs(
 				if (!els.length || !els.every((el) => el.type === "StringLiteral")) {
 					return;
 				}
-				if (rewriteMappedClassNode(path.node, classMap)) {
+				if (rewriteMappedClassNode(path.node, classMap, unhash)) {
 					hasModifications = true;
 				}
 			},
 
 			ExportDefaultDeclaration(path) {
-				if (rewriteMappedClassNode(path.node.declaration, classMap)) {
+				if (rewriteMappedClassNode(path.node.declaration, classMap, unhash)) {
 					hasModifications = true;
 				}
 			},
 		});
 
+		if (unhash && stripRuntimeImports(ast)) {
+			hasModifications = true;
+		}
+
 		const runtimeImport = options?.runtimeImport ?? "esm";
-		if (needsRuntime && runtimeImport && injectRuntimeImport(ast, runtimeImport)) {
+		if (
+			!unhash &&
+			needsRuntime &&
+			runtimeImport &&
+			injectRuntimeImport(ast, runtimeImport)
+		) {
 			hasModifications = true;
 		}
 

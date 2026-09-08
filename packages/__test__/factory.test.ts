@@ -64,6 +64,16 @@ describe("transformAtomicSource", () => {
 		expect(result.code).toContain("CLASS_MAP");
 	});
 
+	it("skips hashing JS sources when library mode is on", async () => {
+		const plugin = createPlugin({library: true});
+		expect(
+			await plugin.transform(
+				`export const n = <div className="flex" />;`,
+				"src/Button.tsx",
+			),
+		).toBeNull();
+	});
+
 	it("rewrites JS sources", async () => {
 		const result = await transformAtomicSource(
 			`export const n = <div className="flex" />;`,
@@ -306,13 +316,16 @@ describe("factory plugin", () => {
 
 		plugin.rollup.generateBundle({preserveModules: true}, bundle);
 		expect(bundle["_virtual/tailwind-atomic-runtime.js"]).toBeUndefined();
-		expect(bundle["components/alert.js"]?.code).toMatch(
-			/from\s+['"]tailwindcss-atomic\/runtime['"]/,
-		);
+		expect(bundle["components/alert.js"]?.code).toContain("cva(");
+		expect(bundle["components/alert.js"]?.code).toContain("flex");
+		expect(bundle["components/alert.js"]?.code).not.toContain("_aaaaaa");
+		expect(bundle["components/alert.js"]?.code).not.toContain("_twAtomicReconcile");
 		expect(bundle["components/alert.js"]?.code).not.toContain(
 			"tailwind-atomic-runtime",
 		);
-		expect(bundle["components/alert.js"]?.code).toContain("_aaaaaa");
+		expect(bundle["components/alert.js"]?.code).not.toContain(
+			"tailwindcss-atomic/runtime",
+		);
 		expect(bundle["components/alert.js"]?.code).not.toMatch(
 			/atomicReconcile\(\s*_twAtomicReconcile/,
 		);

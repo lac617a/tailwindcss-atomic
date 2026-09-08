@@ -156,6 +156,14 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 		ATOMIC_RUNTIME.cssEntries.push(...options.cssEntries);
 	}
 
+	if (options.library) {
+		console.warn(
+			"[tailwind-atomic] `library: true` is for Rollup UI packages (preserveModules), not next.config. Ignoring so the app still hashes classNames.",
+		);
+	}
+
+	const {library: _library, ...atomicOptions} = options;
+
 	const monorepoRoot = findMonorepoRoot(process.cwd());
 	const userWebpack = config.webpack;
 	const turbopackRoot =
@@ -185,7 +193,7 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 			webpackConfig.plugins ??= [];
 			webpackConfig.plugins.push(
 				webpackTailwindAtomic({
-					...options,
+					...atomicOptions,
 					transpilePackages,
 				}),
 			);

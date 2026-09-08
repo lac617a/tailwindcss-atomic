@@ -37,9 +37,10 @@ interface UnpluginFactoryOptions {
 	 */
 	transformEmittedJs?: boolean;
 	/**
-	 * Design-system builds (`preserveModules` UI packages). Leave original
-	 * Tailwind class names in JS so the consuming app can generate CSS and
-	 * hash. Default: auto — on when Rollup `preserveModules` is set.
+	 * Design-system / Rollup `preserveModules` builds only. Leave original
+	 * Tailwind class names in the published JS so the consuming app can
+	 * generate CSS and hash. Do **not** set this in `next.config` — the Next
+	 * adapter ignores it. Default: auto-on when Rollup `preserveModules` is set.
 	 */
 	library?: boolean;
 }

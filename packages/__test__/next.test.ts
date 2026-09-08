@@ -229,6 +229,21 @@ describe("withTailwindAtomic", () => {
 		expect(ATOMIC_RUNTIME.preserveClasses).toContain("text-logo");
 	});
 
+	it("ignores library: true so a Next app still hashes classNames", () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const config = withTailwindAtomic({}, {library: true});
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("`library: true` is for Rollup UI packages"),
+		);
+		const webpackConfig = {
+			plugins: [] as unknown[],
+			module: {rules: [] as unknown[]},
+		};
+		config.webpack(webpackConfig, {dev: true});
+		expect(webpackConfig.plugins.length).toBeGreaterThan(0);
+		warn.mockRestore();
+	});
+
 	it("falls back to dist/loader.cjs when the source shim is missing", async () => {
 		const fs = await import("node:fs");
 		const path = await import("node:path");

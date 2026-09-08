@@ -890,6 +890,9 @@ describe("looksLikeTailwindUtilityClass", () => {
 	it("accepts Tailwind-shaped names including theme tokens and variants", () => {
 		for (const name of [
 			"flex",
+			"rounded",
+			"rounded-md",
+			"rounded-full",
 			"p-4",
 			"-mt-2",
 			"items-center",

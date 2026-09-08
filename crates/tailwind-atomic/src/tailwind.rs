@@ -40,6 +40,7 @@ const BARE_UTILITIES: &[&str] = &[
     "prose",
     "relative",
     "resize",
+    "rounded",
     "ring",
     "sepia",
     "shadow",
@@ -414,6 +415,9 @@ mod tests {
         for name in [
             "flex",
             "hidden",
+            "rounded",
+            "rounded-md",
+            "rounded-full",
             "p-4",
             "-mt-2",
             "px-4",

@@ -1,5 +1,9 @@
 import {ATOMIC_RUNTIME} from "../shared/constants";
-import {generateRuntimeModule} from "../shared/virtual-runtime";
+import {
+	generateRuntimeModule,
+	isEmittedVirtualRuntimePath,
+	rewriteEmittedRuntimeImports,
+} from "../shared/virtual-runtime";
 
 function instantiateRuntime(
 	source: string,
@@ -73,5 +77,33 @@ describe("atomicReconcile runtime", () => {
 		expect(atomicReconcile("before:content-[''] after:content-['*']")).toBe(
 			"_bemp01 _astar1",
 		);
+	});
+});
+
+describe("preserveModules runtime specifiers", () => {
+	it("detects emitted virtual runtime chunks", () => {
+		expect(isEmittedVirtualRuntimePath("\0tailwind-atomic-runtime")).toBe(true);
+		expect(
+			isEmittedVirtualRuntimePath("_virtual/tailwind-atomic-runtime.js"),
+		).toBe(true);
+		expect(isEmittedVirtualRuntimePath("tailwindcss-atomic/runtime")).toBe(
+			false,
+		);
+		expect(isEmittedVirtualRuntimePath("components/alert.js")).toBe(false);
+	});
+
+	it("rewrites relative virtual imports to the package subpath", () => {
+		expect(
+			rewriteEmittedRuntimeImports(
+				`import { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwind-atomic-runtime.js";`,
+			),
+		).toBe(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";`,
+		);
+		expect(
+			rewriteEmittedRuntimeImports(
+				`import { atomicReconcile } from "tailwindcss-atomic/runtime";`,
+			),
+		).toBe(`import { atomicReconcile } from "tailwindcss-atomic/runtime";`);
 	});
 });

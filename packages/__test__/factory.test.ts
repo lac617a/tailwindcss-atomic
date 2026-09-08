@@ -278,6 +278,60 @@ describe("factory plugin", () => {
 		expect(bundle["main.js"]?.code).toBe(`other("flex")`);
 	});
 
+	it("rewrites preserveModules virtual runtime imports to the package specifier", () => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const plugin = createPlugin();
+		const bundle: Record<
+			string,
+			{
+				type: string;
+				fileName: string;
+				code?: string;
+				source?: string;
+				facadeModuleId?: string;
+			}
+		> = {
+			"_virtual/tailwind-atomic-runtime.js": {
+				type: "chunk",
+				fileName: "_virtual/tailwind-atomic-runtime.js",
+				facadeModuleId: "\0tailwind-atomic-runtime",
+				code: "export function atomicReconcile(value) { return value; }",
+			},
+			"components/alert.js": {
+				type: "chunk",
+				fileName: "components/alert.js",
+				code: `'use client';\nimport { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwind-atomic-runtime.js";\nvar alertCva = _twAtomicReconcile(cva("flex"));`,
+			},
+		};
+
+		plugin.rollup.generateBundle({preserveModules: true}, bundle);
+		expect(bundle["_virtual/tailwind-atomic-runtime.js"]).toBeUndefined();
+		expect(bundle["components/alert.js"]?.code).toMatch(
+			/from\s+['"]tailwindcss-atomic\/runtime['"]/,
+		);
+		expect(bundle["components/alert.js"]?.code).not.toContain(
+			"tailwind-atomic-runtime",
+		);
+		expect(bundle["components/alert.js"]?.code).toContain("_aaaaaa");
+		expect(bundle["components/alert.js"]?.code).not.toMatch(
+			/atomicReconcile\(\s*_twAtomicReconcile/,
+		);
+	});
+
+	it("keeps the virtual runtime chunk when preserveModules is off", () => {
+		const plugin = createPlugin();
+		const bundle = {
+			"_virtual/tailwind-atomic-runtime.js": {
+				type: "chunk" as const,
+				fileName: "_virtual/tailwind-atomic-runtime.js",
+				facadeModuleId: "\0tailwind-atomic-runtime",
+				code: "export function atomicReconcile(value) { return value; }",
+			},
+		};
+		plugin.rollup.generateBundle({}, bundle);
+		expect(bundle["_virtual/tailwind-atomic-runtime.js"]).toBeDefined();
+	});
+
 	it("invalidates JS modules after CSS is atomicized", async () => {
 		const invalidateModule = vi.fn();
 		ATOMIC_RUNTIME.viteServer = {

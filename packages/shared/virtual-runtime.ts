@@ -60,6 +60,64 @@ function isAtomicRuntimeModule(id: string) {
 	return /(?:^|\/)atomic-runtime\.(mjs|cjs|js|mts|cts|ts)$/.test(clean);
 }
 
+const RECONCILE_WRAPPER_NAMES = new Set([
+	RUNTIME_FN,
+	"atomicReconcile",
+	"atomicClassName",
+]);
+
+function isReconcileWrapperName(name: string | null | undefined) {
+	return Boolean(name && RECONCILE_WRAPPER_NAMES.has(name));
+}
+
+/**
+ * `cva()` returns a recipe function, not a className string. Wrapping it with
+ * `_twAtomicReconcile` is a no-op at runtime but still requires the import —
+ * which Rollup `preserveModules` often drops (virtual `\0` chunk).
+ */
+function shouldWrapWithRuntime(
+	funcName: string,
+	targetFunctions: Set<string>,
+) {
+	if (funcName === "cva") return false;
+	if (isReconcileWrapperName(funcName)) return false;
+	return targetFunctions.has(funcName);
+}
+
+function isEmittedVirtualRuntimePath(id: string) {
+	const clean = posixId(id);
+	if (!clean) return false;
+	if (clean === VIRTUAL_RUNTIME_RESOLVED || clean.startsWith("\0")) {
+		return clean.includes("tailwind-atomic-runtime");
+	}
+	if (clean === VIRTUAL_RUNTIME_IMPORT) return false;
+	return (
+		clean.includes("tailwind-atomic-runtime") ||
+		/(?:^|\/)_virtual_?\/?.*runtime/i.test(clean)
+	);
+}
+
+/**
+ * Published `preserveModules` builds must import the package subpath so the
+ * consuming app (Next/Vite) can inject the real CLASS_MAP. Rollup otherwise
+ * emits a relative `\0tailwind-atomic-runtime` chunk that is not a real file.
+ */
+function rewriteEmittedRuntimeImports(code: string) {
+	if (
+		!code.includes("tailwind-atomic-runtime") &&
+		!code.includes("\0tailwind-atomic-runtime")
+	) {
+		return code;
+	}
+	return code.replace(
+		/(['"])([^'"]*?tailwind-atomic-runtime[^'"]*|\0tailwind-atomic-runtime)\1/g,
+		(match, quote: string, spec: string) => {
+			if (spec === VIRTUAL_RUNTIME_IMPORT) return match;
+			return `${quote}${VIRTUAL_RUNTIME_IMPORT}${quote}`;
+		},
+	);
+}
+
 function packageDeclaresTwMerge(root: string) {
 	try {
 		const pkgPath = path.join(root, "package.json");
@@ -207,5 +265,9 @@ export {
 	generateRuntimeModule,
 	isAtomicRuntimeModule,
 	isVirtualRuntimeLoadId,
+	isReconcileWrapperName,
+	shouldWrapWithRuntime,
+	isEmittedVirtualRuntimePath,
+	rewriteEmittedRuntimeImports,
 	projectHasTwMerge,
 };

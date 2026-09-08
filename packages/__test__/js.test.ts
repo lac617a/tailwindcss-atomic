@@ -355,6 +355,54 @@ describe("transformJs", () => {
 		expect(result.code).toContain("_twAtomicReconcile(cn(");
 		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
 	});
+
+	it("does not wrap cva() with the runtime helper", () => {
+		ATOMIC_RUNTIME.classMap["rounded"] = "_round1";
+		const result = transformJs(
+			`'use client';\nimport { cva } from 'class-variance-authority';\nvar alertCva = cva("flex rounded");`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa _round1");
+		expect(result.code).not.toMatch(/\brounded\b/);
+		expect(result.code).not.toContain("_twAtomicReconcile");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+		expect(result.code).toMatch(/['"]use client['"]/);
+	});
+
+	it("re-injects a missing runtime import after preserveModules dropped it", () => {
+		const result = transformJs(
+			`'use client';\nvar alertCva = _twAtomicReconcile(cva("flex"));`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime"`,
+		);
+		const clientAt = result.code?.search(/['"]use client['"]/) ?? -1;
+		const importAt = result.code?.indexOf("tailwindcss-atomic/runtime") ?? -1;
+		expect(clientAt).toBeGreaterThanOrEqual(0);
+		expect(importAt).toBeGreaterThan(clientAt);
+		expect(result.code).not.toMatch(/atomicReconcile\(\s*_twAtomicReconcile/);
+	});
+
+	it("does not double-wrap when Rollup dealiases atomicReconcile", () => {
+		const result = transformJs(
+			`import { atomicReconcile } from "tailwindcss-atomic/runtime";\nvar alertCva = atomicReconcile(cva("flex"));`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("atomicReconcile(cva(");
+		expect(result.code).not.toMatch(/_twAtomicReconcile\s*\(/);
+		expect(result.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+	});
+
+	it("aliases _twAtomicReconcile onto an existing atomicReconcile import when wrapping cn", () => {
+		const result = transformJs(
+			`import { atomicReconcile } from "tailwindcss-atomic/runtime";\ncn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(result.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toMatch(/atomicReconcile as _twAtomicReconcile/);
+	});
 });
 
 describe("invalidateJsModules", () => {

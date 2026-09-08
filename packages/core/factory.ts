@@ -31,7 +31,9 @@ import {
 import {
 	generateRuntimeModule,
 	isAtomicRuntimeModule,
+	isEmittedVirtualRuntimePath,
 	isVirtualRuntimeLoadId,
+	rewriteEmittedRuntimeImports,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
 } from "../shared/virtual-runtime";
@@ -54,6 +56,40 @@ export async function transformAtomicSource(code: string, id: string) {
 
 	await warmupClassMapFromCss();
 	return transformJs(code, ATOMIC_RUNTIME.targetFunctions);
+}
+
+type RollupOutputOptions = {
+	preserveModules?: boolean;
+};
+
+type RollupOutputChunk = OutputChunk & {
+	facadeModuleId?: string | null;
+	moduleIds?: string[];
+};
+
+function chunkLookupIds(fileName: string, file: RollupOutputChunk) {
+	return [fileName, file.facadeModuleId, ...(file.moduleIds ?? [])].filter(
+		(id): id is string => Boolean(id),
+	);
+}
+
+function isVirtualRuntimeOutputChunk(fileName: string, file: OutputChunk) {
+	return chunkLookupIds(fileName, file as RollupOutputChunk).some((id) =>
+		isEmittedVirtualRuntimePath(id),
+	);
+}
+
+function rewritePreserveModulesRuntime(bundle: OutputBundle) {
+	for (const [fileName, file] of Object.entries(bundle)) {
+		if (file.type === "chunk" && isVirtualRuntimeOutputChunk(fileName, file)) {
+			delete bundle[fileName];
+		}
+	}
+	for (const file of Object.values(bundle)) {
+		if (file.type !== "chunk" || typeof file.code !== "string") continue;
+		const next = rewriteEmittedRuntimeImports(file.code);
+		if (next !== file.code) file.code = next;
+	}
 }
 
 function rewriteBundle(bundle: OutputBundle, targetFunctions: Set<string>) {
@@ -355,7 +391,10 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 		},
 
 		rollup: {
-			generateBundle(_options, bundle) {
+			generateBundle(options: RollupOutputOptions, bundle) {
+				if (options?.preserveModules) {
+					rewritePreserveModulesRuntime(bundle);
+				}
 				rewriteBundle(bundle, targetFunctions);
 			},
 		},

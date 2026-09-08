@@ -656,6 +656,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn atomicizes_bare_rounded() {
+        let out = atomicize_stylesheet(
+            ".rounded { border-radius: 0.25rem } .flex { display: flex }",
+        )
+        .unwrap();
+        assert!(out.class_map.get("rounded").is_some(), "css={}", out.css);
+        assert!(out.class_map.get("flex").is_some());
+        assert!(!out.css.contains(".rounded {"));
+        assert!(!out.css.contains(".flex {"));
+    }
+
+    #[test]
     fn keeps_hover_on_the_selector() {
         let out =
             atomicize_stylesheet(".hover\\:bg-red-500:hover { background-color: red }").unwrap();

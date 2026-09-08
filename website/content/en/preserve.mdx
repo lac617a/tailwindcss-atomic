@@ -34,8 +34,33 @@ Add extra names via `preserveFunctions` if your codebase uses another helper.
 
 ## Runtime `cn` / Tailwind Merge
 
-If you use `tailwind-merge` at runtime, hashed classes no longer look like Tailwind utilities. Use the runtime helpers from `tailwindcss-atomic/runtime` so merge still sees the original tokens when needed, or merge **before** rewrite (build time).
+If you use `tailwind-merge` at runtime, hashed classes no longer look like Tailwind utilities. The bundler wraps `cn` / `clsx` / `cx` / `twMerge` with `_twAtomicReconcile`: it **unhashes**, runs `twMerge`, then hashes again. Merge still sees original tokens.
 
 <Callout type="info">
-  Most apps do not need a runtime: rewrite happens at build time. Reach for `runtime` when class strings are built after the bundle has already been transformed.
+  Most apps do not need to import `runtime` yourself: rewrite happens at build time. Reach for `twIgnore` when class strings must stay literal.
 </Callout>
+
+### `bg-opacity-*` drops the color (tailwind-merge v3)
+
+With **tailwind-merge v3** (Tailwind CSS v4), `bg-opacity-50` is treated as another `bg-*` color. The **last** class wins and the real color is removed:
+
+```ts
+twMerge("bg-neutral-300 bg-opacity-50");
+// → "bg-opacity-50"
+```
+
+In the DOM you still see the hash for `bg-opacity-50` (`--tw-bg-opacity: .5`) and **no `background-color`**. The same happens with `text-opacity-*` and `border-opacity-*`.
+
+This is not a hashing bug. It shows up on `cx()` / `cn()` components (those calls are reconciled). A `cva()` recipe is not wrapped, so it can look “fine” next to a skeleton that lost its fill.
+
+Use the slash modifier instead of the two-class form:
+
+```tsx
+// ❌ tailwind-merge v3 drops bg-neutral-300
+cx("rounded-lg bg-neutral-300 bg-opacity-50", className);
+
+// ✅ one utility: color + opacity
+cx("rounded-lg bg-neutral-300/50", className);
+```
+
+Same pattern: `text-black/50`, `border-neutral-300/50`. See [tailwind-merge#579](https://github.com/dcastil/tailwind-merge/issues/579).

@@ -34,8 +34,33 @@ Añade más nombres con `preserveFunctions` si tu código usa otro helper.
 
 ## Runtime `cn` / Tailwind Merge
 
-Si usas `tailwind-merge` en runtime, las clases hasheadas ya no parecen utilidades de Tailwind. Usa los helpers de `tailwindcss-atomic/runtime` para que el merge siga viendo los tokens originales cuando haga falta, o haz el merge **antes** del rewrite (en build).
+Si usas `tailwind-merge` en runtime, las clases hasheadas ya no parecen utilidades de Tailwind. El bundler envuelve `cn` / `clsx` / `cx` / `twMerge` con `_twAtomicReconcile`: **deshashea**, corre `twMerge` y vuelve a hashear. El merge sigue viendo los tokens originales.
 
 <Callout type="info">
-  La mayoría de apps no necesita runtime: el rewrite ocurre en el build. Usa `runtime` cuando los strings de clase se construyen después de que el bundle ya se transformó.
+  La mayoría de apps no necesita importar `runtime` a mano: el rewrite ocurre en el build. Usa `twIgnore` cuando el string deba quedarse literal.
 </Callout>
+
+### `bg-opacity-*` se come el color (tailwind-merge v3)
+
+Con **tailwind-merge v3** (Tailwind CSS v4), `bg-opacity-50` se trata como otro `bg-*`. Gana **la última** clase y desaparece el color:
+
+```ts
+twMerge("bg-neutral-300 bg-opacity-50");
+// → "bg-opacity-50"
+```
+
+En el DOM queda el hash de `bg-opacity-50` (`--tw-bg-opacity: .5`) y **no hay `background-color`**. Lo mismo con `text-opacity-*` y `border-opacity-*`.
+
+No es un fallo del hasher. Sale en componentes con `cx()` / `cn()` (esas llamadas se reconcilian). Un `cva()` no se envuelve, así que al lado un skeleton puede “perder” el relleno y el resto de la UI verse bien.
+
+Usa el modificador con `/` en lugar de las dos clases:
+
+```tsx
+// ❌ tailwind-merge v3 tira bg-neutral-300
+cx("rounded-lg bg-neutral-300 bg-opacity-50", className);
+
+// ✅ una sola utilidad: color + opacidad
+cx("rounded-lg bg-neutral-300/50", className);
+```
+
+El mismo patrón: `text-black/50`, `border-neutral-300/50`. Ver [tailwind-merge#579](https://github.com/dcastil/tailwind-merge/issues/579).

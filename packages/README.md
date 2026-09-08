@@ -149,6 +149,8 @@ El `tailwind.config.js` compartido (`packages/config/tailwind-config`) no hay qu
 
 Si un paquete UI se publica como `dist/*.js` y no está en `transpilePackages`, sus strings `flex` / `bg-revamp-*` llegan intactos al DOM y se mezclan con los hashes de la app. Añádelo a `transpilePackages` o importa el source (`exports` → `src`).
 
+El Rollup del design system (`preserveModules`) **no** debe llevar `tailwindcss-atomic`: el `dist` publica `bg-neutral-300` tal cual y hashea la app Next. `{ library: true }` **no** va en `next.config` (el adapter de Next lo ignora). Si `cx("… bg-neutral-300 bg-opacity-50")` pierde el color, es `twMerge` v3: usa `bg-neutral-300/50` (sección más abajo).
+
 ## Next.js 12 (Pages Router, Tailwind 3)
 
 ```js
@@ -325,7 +327,7 @@ type Options = {
 };
 ```
 
-Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben atributos JSX `className` / `class`, props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`, atributos `class` en HTML (`index.html`, assets emitidos) y plantillas **Astro** (`.astro`, scripts extraídos y `class:list` estático).
+Por defecto `targetFunctions` es `cn`, `clsx`, `classnames`, `cx`, `cva` y `twMerge`. También se reescriben atributos JSX `className` / `class`, props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`, atributos `class` en HTML (`index.html`, assets emitidos) y plantillas **Astro** (`.astro`, scripts extraídos y `class:list` estático).
 
 Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`.
 
@@ -336,6 +338,33 @@ withTailwindAtomic(nextConfig, {
 	targetFunctions: new Set(["cn", "clsx", "tw"]),
 });
 ```
+
+## tailwind-merge v3 y `bg-opacity-*`
+
+El plugin envuelve `cn` / `clsx` / `cx` / `twMerge` con `_twAtomicReconcile`: deshashea, corre `twMerge` y vuelve a hashear.
+
+Con **tailwind-merge v3** (Tailwind CSS v4), `bg-opacity-50` se trata como otro `bg-*`. Gana la última clase y **desaparece el color**:
+
+```ts
+twMerge("bg-neutral-300 bg-opacity-50");
+// → "bg-opacity-50"
+```
+
+En el DOM ves el hash de `bg-opacity-50` (`--tw-bg-opacity: .5`) y no hay `background-color`. Lo mismo con `text-opacity-*` y `border-opacity-*`.
+
+No es un bug del mapa de hashes. Un `cva()` no se envuelve; un `cx()` sí, así que un skeleton (u otro `cx`) puede perder el relleno y el resto de la UI verse bien.
+
+Usa el modificador con `/`:
+
+```tsx
+// ❌ tailwind-merge v3 tira bg-neutral-300
+cx("rounded-lg bg-neutral-300 bg-opacity-50", className);
+
+// ✅ una sola utilidad: color + opacidad
+cx("rounded-lg bg-neutral-300/50", className);
+```
+
+El mismo patrón: `text-black/50`, `border-neutral-300/50`. Detalle: [tailwind-merge#579](https://github.com/dcastil/tailwind-merge/issues/579). Más contexto en la doc: [Conservar y runtime](https://atomic.profiya.com/es/preserve).
 
 ## Qué se conserva
 

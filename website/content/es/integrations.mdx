@@ -119,6 +119,10 @@ export default withTailwindAtomic(nextConfig, {
   Si un paquete UI se publica como `dist/*.js` y no está en `transpilePackages`, sus strings `flex` / `bg-*` llegan intactos al DOM y se mezclan con los hashes de la app. Añádelo a `transpilePackages` o importa el source (`exports` → `src`).
 </Callout>
 
+**No** hashees ese `dist` del UI en Rollup (`preserveModules` debe dejar las utilidades originales). **No** pases `{ library: true }` a `withTailwindAtomic` en la app Next: esa opción es solo para el Rollup del design system, y el adapter de Next la ignora.
+
+Si en el DOM está `bg-opacity-50` y no hay `background-color`, `twMerge` v3 tiró `bg-neutral-300`. Usa `bg-neutral-300/50`. Ver [Conservar y runtime](./preserve).
+
 ## Next.js 12 (Pages Router, Tailwind 3)
 
 ```js

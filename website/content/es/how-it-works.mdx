@@ -41,7 +41,7 @@ El crate Rust (`lightningcss` + `wasm-bindgen`) atomiciza CSS y reescribe class 
 
 ## Qué se reescribe
 
-Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se reescriben:
+Por defecto `targetFunctions` es `cn`, `clsx`, `classnames`, `cx`, `cva` y `twMerge`. También se reescriben:
 
 - atributos JSX `className` / `class`
 - props `className`/`class` de `jsx` / `jsxs` / `jsxDEV`
@@ -49,6 +49,10 @@ Por defecto `targetFunctions` es `cn`, `clsx`, `classnames` y `cva`. También se
 - plantillas Astro (`.astro`, scripts extraídos y `class:list` estático)
 
 Envuelve strings que no deban tocarse con `twIgnore("flex hidden")`. Ver [Conservar y runtime](./preserve).
+
+<Callout type="warning">
+  `cx("bg-neutral-300 bg-opacity-50")` con tailwind-merge v3 se come el color. Usa `bg-neutral-300/50`. Detalle en [Conservar y runtime](./preserve).
+</Callout>
 
 ## Los selectores se conservan
 

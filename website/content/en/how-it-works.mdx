@@ -41,7 +41,7 @@ The Rust crate (`lightningcss` + `wasm-bindgen`) atomicizes CSS and rewrites cla
 
 ## What gets rewritten
 
-By default `targetFunctions` is `cn`, `clsx`, `classnames`, and `cva`. The plugin also rewrites:
+By default `targetFunctions` is `cn`, `clsx`, `classnames`, `cx`, `cva`, and `twMerge`. The plugin also rewrites:
 
 - JSX attributes `className` / `class`
 - `className` / `class` props of `jsx` / `jsxs` / `jsxDEV`
@@ -49,6 +49,10 @@ By default `targetFunctions` is `cn`, `clsx`, `classnames`, and `cva`. The plugi
 - Astro templates (`.astro`, extracted scripts, static `class:list`)
 
 Wrap strings that must stay untouched with `twIgnore("flex hidden")`. See [Preserve & runtime](./preserve).
+
+<Callout type="warning">
+  `cx("bg-neutral-300 bg-opacity-50")` with tailwind-merge v3 drops the color. Use `bg-neutral-300/50`. Details in [Preserve & runtime](./preserve).
+</Callout>
 
 ## Selectors stay intact
 

@@ -526,14 +526,14 @@ dependencies = [
 
 [[package]]
 name = "tailwind-atomic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "lightningcss",
 ]
 
 [[package]]
 name = "tailwind-atomic-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "getrandom",
  "serde",

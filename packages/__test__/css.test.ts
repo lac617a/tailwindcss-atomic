@@ -170,6 +170,29 @@ describe("transformClassString", () => {
 			}),
 		).toBe("_bhello _aaaaaa");
 	});
+
+	it("rehashes a leftover hash onto the current split declarations", () => {
+		expect(
+			transformClassString("_ce2951", {
+				"bg-neutral-300": "_ce2951 _de1682 _c8588e _2f8a31",
+			}),
+		).toBe("_ce2951 _de1682 _c8588e _2f8a31");
+	});
+
+	it("rehashes stale hashes from hashReverse after the CSS map moved on", () => {
+		ATOMIC_RUNTIME.hashReverse["_ce2951"] = "bg-neutral-300";
+		expect(
+			transformClassString(
+				"ui-latamwin-skeleton-item _ce2951 _983484",
+				{
+					"bg-neutral-300": "_de1682 _c8588e _2f8a31",
+					"bg-opacity-50": "_983484",
+				},
+			),
+		).toBe(
+			"ui-latamwin-skeleton-item _de1682 _c8588e _2f8a31 _983484",
+		);
+	});
 });
 
 describe("unhashClassString", () => {
@@ -226,6 +249,15 @@ describe("mergeClassMap", () => {
 		expect(ATOMIC_RUNTIME.classMap["disabled:py-2"]).toBe("_dis001");
 		expect(mergeClassMap({"fill-[#069BE8]": "_hex001"})).toBe(true);
 		expect(ATOMIC_RUNTIME.classMap["fill-[#069be8]"]).toBe("_hex001");
+	});
+
+	it("remembers dropped hashes so JS can rehash after a CSS rebuild", () => {
+		expect(mergeClassMap({"bg-neutral-300": "_ce2951"})).toBe(true);
+		expect(mergeClassMap({"bg-neutral-300": "_de1682 _c8588e _2f8a31"})).toBe(
+			true,
+		);
+		expect(ATOMIC_RUNTIME.hashReverse["_ce2951"]).toBe("bg-neutral-300");
+		expect(ATOMIC_RUNTIME.hashReverse["_de1682"]).toBe("bg-neutral-300");
 	});
 });
 

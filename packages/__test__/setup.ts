@@ -46,6 +46,7 @@ beforeEach(() => {
 	wasmMock.impl = defaultProcessTailwindCss;
 	ATOMIC_RUNTIME.classMap = Object.create(null);
 	ATOMIC_RUNTIME.classMap["__skip_warmup"] = "_skip";
+	ATOMIC_RUNTIME.hashReverse = Object.create(null);
 	ATOMIC_RUNTIME.viteServer = null;
 	ATOMIC_RUNTIME.projectRoots = [];
 	ATOMIC_RUNTIME.webpackWatchings.clear();

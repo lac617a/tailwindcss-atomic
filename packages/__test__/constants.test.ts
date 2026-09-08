@@ -49,6 +49,7 @@ describe("constants", () => {
 	it("shares a singleton runtime on globalThis", () => {
 		expect(ATOMIC_RUNTIME.targetFunctions).toBeInstanceOf(Set);
 		expect(ATOMIC_RUNTIME.classMap).toBeTypeOf("object");
+		expect(ATOMIC_RUNTIME.hashReverse).toBeTypeOf("object");
 		expect(ATOMIC_RUNTIME.viteServer).toBeNull();
 		expect(ATOMIC_RUNTIME.webpackWatchings).toBeInstanceOf(Set);
 		expect(ATOMIC_RUNTIME.transpilePackages).toBeInstanceOf(Set);

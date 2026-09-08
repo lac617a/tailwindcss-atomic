@@ -70,6 +70,13 @@ describe("atomicReconcile runtime", () => {
 		);
 	});
 
+	it("remaps stale hashes after the class-map moves on", () => {
+		ATOMIC_RUNTIME.classMap["bg-neutral-300"] = "_de1682 _c8588e _2f8a31";
+		ATOMIC_RUNTIME.hashReverse["_ce2951"] = "bg-neutral-300";
+		const {atomicReconcile} = instantiateRuntime(generateRuntimeModule());
+		expect(atomicReconcile("_ce2951")).toBe("_de1682 _c8588e _2f8a31");
+	});
+
 	it("keeps before/after content tokens that contain quotes", () => {
 		ATOMIC_RUNTIME.classMap["before:content-['']"] = "_bemp01";
 		ATOMIC_RUNTIME.classMap["after:content-['*']"] = "_astar1";

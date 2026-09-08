@@ -415,6 +415,16 @@ function toPlainMap(classMap: Record<string, string>) {
 	return classMap;
 }
 
+function rememberHashAliases(original: string, hashes: string) {
+	if (!original || original.startsWith("__")) return;
+	if (!ATOMIC_RUNTIME.hashReverse) {
+		ATOMIC_RUNTIME.hashReverse = Object.create(null);
+	}
+	for (const hash of splitClassTokens(hashes)) {
+		if (hash) ATOMIC_RUNTIME.hashReverse[hash] = original;
+	}
+}
+
 function mergeClassMap(classMap: Record<string, string>) {
 	let changed = false;
 	const plain = toPlainMap(classMap);
@@ -427,13 +437,18 @@ function mergeClassMap(classMap: Record<string, string>) {
 		const prev = ATOMIC_RUNTIME.classMap[key];
 		if (!prev) {
 			ATOMIC_RUNTIME.classMap[key] = value;
+			rememberHashAliases(key, value);
 			changed = true;
 			continue;
 		}
-		if (prev === value) continue;
+		if (prev === value) {
+			rememberHashAliases(key, value);
+			continue;
+		}
 		const merged = [...new Set([...prev.split(/\s+/), ...value.split(/\s+/)])]
 			.filter(Boolean)
 			.join(" ");
+		rememberHashAliases(key, merged);
 		if (merged !== prev) {
 			ATOMIC_RUNTIME.classMap[key] = merged;
 			changed = true;
@@ -897,7 +912,8 @@ function transformClassString(
 	const trailing = classStr.match(/\s*$/)?.[0] ?? "";
 	const mid = classStr.slice(leading.length, classStr.length - trailing.length);
 	if (!mid) return classStr;
-	const rewritten = splitClassTokens(mid)
+	const originals = unhashClassString(mid, resolveReverseMap(classMap));
+	const rewritten = splitClassTokens(originals)
 		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
 	return `${leading}${rewritten}${trailing}`;
@@ -907,9 +923,20 @@ function reverseClassMap(classMap: Record<string, string>) {
 	const reverse: Record<string, string> = Object.create(null);
 	for (const [original, hashes] of Object.entries(toPlainMap(classMap))) {
 		if (typeof hashes !== "string" || !hashes) continue;
+		if (original.startsWith("__")) continue;
 		for (const hash of splitClassTokens(hashes)) {
 			if (hash) reverse[hash] = original;
 		}
+	}
+	return reverse;
+}
+
+function resolveReverseMap(classMap: Record<string, string>) {
+	const reverse = reverseClassMap(classMap);
+	const stale = ATOMIC_RUNTIME.hashReverse;
+	if (!stale) return reverse;
+	for (const [hash, original] of Object.entries(stale)) {
+		if (hash && original && !reverse[hash]) reverse[hash] = original;
 	}
 	return reverse;
 }
@@ -992,12 +1019,45 @@ function classMapFilePath() {
 	return path.join(root, "node_modules", ".cache", "tailwindcss-atomic", "class-map.json");
 }
 
+function hashReverseFilePath(mapFile = classMapFilePath()) {
+	if (!mapFile) return undefined;
+	return mapFile.toLowerCase().endsWith(".json")
+		? `${mapFile.slice(0, -".json".length)}.rev.json`
+		: `${mapFile}.rev.json`;
+}
+
+function persistHashReverse(mapFile: string) {
+	const file = hashReverseFilePath(mapFile);
+	if (!file) return;
+	const reverse = toPlainMap(ATOMIC_RUNTIME.hashReverse ?? {});
+	writeFileSync(file, JSON.stringify(reverse, null, 2));
+}
+
+function loadPersistedHashReverse(mapFile: string) {
+	const file = hashReverseFilePath(mapFile);
+	if (!file || !existsSync(file)) return;
+	try {
+		const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+		for (const [hash, original] of Object.entries(
+			parsed as Record<string, unknown>,
+		)) {
+			if (typeof original === "string" && original && hash) {
+				ATOMIC_RUNTIME.hashReverse[hash] = original;
+			}
+		}
+	} catch {
+		// Reverse cache is optional.
+	}
+}
+
 function persistClassMap() {
 	const file = classMapFilePath();
 	if (!file) return;
 	try {
 		mkdirSync(path.dirname(file), {recursive: true});
 		writeFileSync(file, JSON.stringify(toPlainMap(ATOMIC_RUNTIME.classMap), null, 2));
+		persistHashReverse(file);
 	} catch {
 		// Cache is optional; a missing node_modules should not fail the build.
 	}
@@ -1006,6 +1066,7 @@ function persistClassMap() {
 function loadPersistedClassMap() {
 	const file = classMapFilePath();
 	if (!file) return false;
+	loadPersistedHashReverse(file);
 	try {
 		if (!existsSync(file)) return false;
 		const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
@@ -1457,4 +1518,6 @@ export {
 	rehydrateClassMapFromCss,
 	persistClassMap,
 	loadPersistedClassMap,
+	classMapFilePath,
+	hashReverseFilePath,
 };

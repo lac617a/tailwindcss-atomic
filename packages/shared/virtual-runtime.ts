@@ -165,6 +165,7 @@ function toPlainMap(classMap: Record<string, string>) {
 
 function generateRuntimeModule() {
 	const classMap = toPlainMap(ATOMIC_RUNTIME.classMap);
+	const staleReverse = toPlainMap(ATOMIC_RUNTIME.hashReverse ?? {});
 	const hasTwMerge = projectHasTwMerge();
 	const importLine = hasTwMerge
 		? `import { twMerge } from "tailwind-merge";`
@@ -173,8 +174,9 @@ function generateRuntimeModule() {
 	return `${importLine}
 
 const CLASS_MAP = ${JSON.stringify(classMap)};
-const REVERSE_MAP = {};
+const REVERSE_MAP = Object.assign(${JSON.stringify(staleReverse)}, {});
 for (const original in CLASS_MAP) {
+	if (String(original).startsWith("__")) continue;
 	for (const hash of String(CLASS_MAP[original]).split(/\\s+/)) {
 		if (hash) REVERSE_MAP[hash] = original;
 	}

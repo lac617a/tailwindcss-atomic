@@ -39,6 +39,8 @@ type PreserveClassPattern = string | RegExp;
 type AtomicRuntime = {
 	viteServer: ViteDevServerLike | null;
 	classMap: Record<string, string>;
+	/** Stale hash → original utility. Survives CSS rebuilds that emit new hashes. */
+	hashReverse: Record<string, string>;
 	targetFunctions: Set<string>;
 	projectRoots: string[];
 	webpackWatchings: Set<WebpackWatchingLike>;
@@ -58,6 +60,7 @@ function getAtomicRuntime(): AtomicRuntime {
 		globalRef[ATOMIC_RUNTIME_KEY] = {
 			viteServer: null,
 			classMap: Object.create(null),
+			hashReverse: Object.create(null),
 			targetFunctions: DEFAULT_TARGET_FUNCTIONS,
 			projectRoots: [],
 			webpackWatchings: new Set(),
@@ -87,6 +90,9 @@ function getAtomicRuntime(): AtomicRuntime {
 	}
 	if (!runtime.cssEntries) {
 		runtime.cssEntries = [];
+	}
+	if (!runtime.hashReverse) {
+		runtime.hashReverse = Object.create(null);
 	}
 	return runtime;
 }

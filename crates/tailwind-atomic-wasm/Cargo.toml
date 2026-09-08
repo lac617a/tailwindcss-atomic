@@ -13,7 +13,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-tailwind-atomic = { path = "../tailwind-atomic", version = "0.1.0" }
+tailwind-atomic = { path = "../tailwind-atomic", version = "0.1.1" }
 wasm-bindgen = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6"

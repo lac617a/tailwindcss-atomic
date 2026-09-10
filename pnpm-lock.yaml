@@ -26,7 +26,7 @@ importers:
     dependencies:
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4
@@ -54,7 +54,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -88,7 +88,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -122,7 +122,7 @@ importers:
         version: 18.3.1(react@18.3.1)
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@types/node':
         specifier: ^22.20.1
@@ -156,7 +156,7 @@ importers:
         version: 18.3.1(react@18.3.1)
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@types/react':
         specifier: ^18.3.12
@@ -193,7 +193,7 @@ importers:
         version: 18.3.1(react@18.3.1)
       tailwindcss-atomic:
         specifier: workspace:*
-        version: link:../../packages
+        version: link:../../packages/tailwindcss-atomic
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -220,8 +220,7 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)
 
-  packages:
-
+  packages/tailwindcss-atomic:
     dependencies:
       '@babel/generator':
         specifier: ^7.24.0
@@ -250,7 +249,6 @@ importers:
       webpack:
         specifier: '>=5'
         version: 5.109.2(postcss@8.5.26)
-
     devDependencies:
       '@types/babel__generator':
         specifier: ^7.27.0

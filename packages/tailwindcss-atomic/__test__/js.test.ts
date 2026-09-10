@@ -1,0 +1,468 @@
+import {parse} from "@babel/parser";
+
+import {ATOMIC_RUNTIME} from "../src/engine/constants";
+import {
+	clearLinkedPackageCache,
+	invalidateJsModules,
+	isJsFile,
+	shouldSkipJsTransform,
+	transformJs,
+} from "../src/engine/js";
+
+describe("isJsFile", () => {
+	it("accepts JS/TS extensions and query strings", () => {
+		expect(isJsFile("src/app.ts")).toBe(true);
+		expect(isJsFile("src/app.tsx")).toBe(true);
+		expect(isJsFile("src/app.js")).toBe(true);
+		expect(isJsFile("src/app.jsx?ts=1")).toBe(true);
+		expect(isJsFile("lib/mod.mjs")).toBe(true);
+		expect(isJsFile("lib\\mod.cjs")).toBe(true);
+	});
+
+	it("rejects CSS and empty ids", () => {
+		expect(isJsFile("app.css")).toBe(false);
+		expect(isJsFile("")).toBe(false);
+		expect(isJsFile("?")).toBe(false);
+	});
+});
+
+describe("shouldSkipJsTransform", () => {
+	it("skips bundler output and foreign node_modules", () => {
+		expect(shouldSkipJsTransform("")).toBe(true);
+		expect(shouldSkipJsTransform("app/.next/server/app/page.js")).toBe(true);
+		expect(shouldSkipJsTransform("node_modules/react/index.js")).toBe(true);
+		expect(shouldSkipJsTransform("/tmp/app/node_modules/clsx/clsx.js")).toBe(
+			true,
+		);
+	});
+
+	it("keeps app source and transpilePackages / workspace design systems", () => {
+		expect(shouldSkipJsTransform("src/app.tsx")).toBe(false);
+		expect(shouldSkipJsTransform("packages/ui/button.tsx")).toBe(false);
+		ATOMIC_RUNTIME.transpilePackages.add("ui-latamwin");
+		expect(
+			shouldSkipJsTransform("node_modules/ui-latamwin/dist/Button.js"),
+		).toBe(false);
+		expect(
+			shouldSkipJsTransform(
+				"/repo/node_modules/@webs/latamwin/dist/index.js",
+			),
+		).toBe(true);
+		ATOMIC_RUNTIME.transpilePackages.add("@webs/latamwin");
+		expect(
+			shouldSkipJsTransform(
+				"/repo/node_modules/@webs/latamwin/dist/index.js",
+			),
+		).toBe(false);
+		clearLinkedPackageCache();
+	});
+});
+
+describe("transformJs", () => {
+	beforeEach(() => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		ATOMIC_RUNTIME.classMap["p-6"] = "_bbbbbb";
+		ATOMIC_RUNTIME.classMap["hidden"] = "_cccccc";
+	});
+
+	it("returns null when there is no code or no class map", () => {
+		ATOMIC_RUNTIME.classMap = Object.create(null);
+		expect(transformJs(`<div className="flex" />`, new Set(["cn"]))).toEqual({
+			code: null,
+			map: null,
+		});
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		expect(transformJs("", new Set(["cn"]))).toEqual({code: null, map: null});
+	});
+
+	it("rewrites JSX class and className string literals", () => {
+		const result = transformJs(
+			`export const n = <div className="flex p-6" class="flex" />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_aaaaaa _bbbbbb");
+		expect(result.code).toContain('class="_aaaaaa"');
+		expect(result.code).not.toContain("flex p-6");
+	});
+
+	it("rewrites before/after content classNames without splitting on quotes", () => {
+		ATOMIC_RUNTIME.classMap["before:content-['']"] = "_bemp01";
+		ATOMIC_RUNTIME.classMap["after:content-['']"] = "_aemp01";
+		ATOMIC_RUNTIME.classMap["before:absolute"] = "_babs01";
+		const result = transformJs(
+			`export const n = <i className="before:absolute before:content-[''] after:content-['']" />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_babs01");
+		expect(result.code).toContain("_bemp01");
+		expect(result.code).toContain("_aemp01");
+		expect(result.code).not.toContain("before:content-[");
+		expect(result.code).not.toContain("after:content-[");
+	});
+
+	it("rewrites JSX className expressions", () => {
+		const result = transformJs(
+			`export const n = <div className={"flex"} />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+	});
+
+	it("rewrites className template literals with ternary interpolations", () => {
+		ATOMIC_RUNTIME.classMap["overflow-hidden"] = "_ovh001";
+		ATOMIC_RUNTIME.classMap["transition-all"] = "_tra001";
+		ATOMIC_RUNTIME.classMap["duration-300"] = "_dur001";
+		ATOMIC_RUNTIME.classMap["max-h-40"] = "_mh4001";
+		ATOMIC_RUNTIME.classMap["border-t"] = "_brt001";
+		ATOMIC_RUNTIME.classMap["max-h-0"] = "_mh0001";
+		const result = transformJs(
+			`export const n = <div className={\`overflow-hidden transition-all duration-300 \${
+				searchOpen ? "max-h-40 border-t" : "max-h-0"
+			}\`} />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_ovh001");
+		expect(result.code).toContain("_tra001");
+		expect(result.code).toContain("_dur001");
+		expect(result.code).toContain("_mh4001");
+		expect(result.code).toContain("_brt001");
+		expect(result.code).toContain("_mh0001");
+		expect(result.code).not.toMatch(/overflow-hidden/);
+		expect(result.code).not.toMatch(/max-h-40/);
+		expect(result.code).not.toMatch(/max-h-0/);
+		expect(result.code).toMatch(/_dur001 \$\{/);
+	});
+
+	it("wraps cn() so twMerge can resolve hashed className props", () => {
+		ATOMIC_RUNTIME.classMap["absolute"] = "_abs001";
+		ATOMIC_RUNTIME.classMap["hidden"] = "_cccccc";
+		ATOMIC_RUNTIME.classMap["sm:flex"] = "_smf001";
+		ATOMIC_RUNTIME.classMap["-right-12"] = "_r12001";
+		ATOMIC_RUNTIME.classMap["-right-6"] = "_r06001";
+		const result = transformJs(
+			`
+			function CarouselNext({ className, orientation }) {
+				return (
+					<Button
+						className={cn(
+							"absolute",
+							orientation === "horizontal" ? "-right-12" : "-bottom-12",
+							className,
+						)}
+					/>
+				);
+			}
+			export const n = <CarouselNext className="hidden sm:flex -right-6" />;
+			`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_twAtomicReconcile");
+		expect(result.code).toContain("tailwindcss-atomic/runtime");
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toContain("_r12001");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).toContain("_smf001");
+		expect(result.code).toContain("_r06001");
+	});
+
+	it("wraps cn(styles.*) without rewriting CSS module members", () => {
+		const result = transformJs(
+			`
+			import styles from "./nexi.module.css";
+			export default function Nexi({ className }) {
+				return <div className={cn(styles.nexi, styles.stIdle, className)} />;
+			}
+			`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toContain("styles.nexi");
+		expect(result.code).toContain("styles.stIdle");
+	});
+
+	it("rewrites jsx runtime props for className and class", () => {
+		const result = transformJs(
+			`
+			jsx("div", { className: "flex" });
+			jsxs("div", { class: "p-6" });
+			_jsx("div", { className: "flex" });
+			_jsxs("div", { "className": "p-6" });
+			jsxDEV("div", { className: "flex" });
+			jsx("div", { ["className"]: "flex" });
+			jsx("div", { id: "flex", ...rest });
+			jsx("div", null);
+			`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+	});
+
+	it("ignores JSX attributes that are not class or className", () => {
+		const result = transformJs(
+			`export const n = <div id="flex" data-class="p-6" />;`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toBeNull();
+	});
+
+	it("leaves strings inside preserveFunctions untouched", () => {
+		const result = transformJs(
+			`twIgnore("flex p-6"); cn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(result.code).toContain('twIgnore("flex p-6")');
+		expect(result.code).toContain("_aaaaaa");
+	});
+
+	it("rewrites member callees whose property is a target helper", () => {
+		const result = transformJs(`obj.cn("flex");`, new Set(["cn"]));
+		expect(result.code).toContain("_aaaaaa");
+	});
+
+	it("rewrites extracted cva base arrays used via an identifier", () => {
+		const result = transformJs(
+			`
+			var classNameDefault = ["flex", "p-6", "hidden"];
+			var chipsCva = cva(classNameDefault, {
+				variants: { size: { sm: ["flex"], md: "p-6" } },
+			});
+			export { chipsCva };
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).not.toMatch(/"flex"/);
+		expect(result.code).not.toMatch(/"p-6"/);
+		expect(result.code).not.toMatch(/"hidden"/);
+	});
+
+	it("rewrites Rollup preserveModules output with a 'use client' banner", () => {
+		ATOMIC_RUNTIME.classMap["items-center"] = "_item01";
+		ATOMIC_RUNTIME.classMap["justify-center"] = "_just02";
+		ATOMIC_RUNTIME.classMap["whitespace-nowrap"] = "_white3";
+		ATOMIC_RUNTIME.classMap["font-medium"] = "_font04";
+		ATOMIC_RUNTIME.classMap["transition-colors"] = "_trans5";
+		ATOMIC_RUNTIME.classMap["text-sm"] = "_cafc46 _ffc2a9";
+		const result = transformJs(
+			`'use client';\nimport { cva } from 'class-variance-authority';\nimport classNameVariantColorScheme from './classNameVariantColorScheme.js';\nvar classNameDefault = ["flex", "items-center", "justify-center", "whitespace-nowrap", "font-medium", "transition-colors"];\nvar chipsCva = cva(classNameDefault, {\n  variants: {\n    colorScheme: classNameVariantColorScheme,\n    size: { sm: ["text-sm"] }\n  }\n});\nexport { chipsCva };\n`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_item01");
+		expect(result.code).not.toMatch(/"flex"/);
+		expect(result.code).not.toMatch(/"items-center"/);
+	});
+
+	it("rewrites exported variant objects that are not inlined into cva", () => {
+		const result = transformJs(
+			`
+			const classNameVariantColorScheme = { default: "flex p-6", primary: "hidden" };
+			export default classNameVariantColorScheme;
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa");
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).not.toMatch(/flex p-6/);
+	});
+
+	it("rewrites cva class values but leaves variant keys and names intact", () => {
+		ATOMIC_RUNTIME.classMap["shadow"] = "_660aea _40fc51 _6d43b5";
+		ATOMIC_RUNTIME.classMap["sm"] = "_smhash";
+		ATOMIC_RUNTIME.classMap["box-border"] = "_bab75d";
+		ATOMIC_RUNTIME.classMap["shadow-sm"] = "_34ae1c";
+		ATOMIC_RUNTIME.classMap["mt-2"] = "_mt2001";
+		const result = transformJs(
+			`
+			cva(["box", "box-border"], {
+				variants: { shadow: { sm: ["shadow-sm"], md: "p-6 hidden" } },
+				defaultVariants: { shadow: "sm" },
+				compoundVariants: [{ shadow: "sm", class: "mt-2" }],
+			});
+			`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("shadow:");
+		expect(result.code).toMatch(/\bsm\s*:/);
+		expect(result.code).toMatch(/\bmd\s*:/);
+		expect(result.code).toContain("_bbbbbb");
+		expect(result.code).toContain("_cccccc");
+		expect(result.code).toContain("_bab75d");
+		expect(result.code).toContain("_34ae1c");
+		expect(result.code).toContain("_mt2001");
+		expect(result.code).not.toContain("_660aea");
+		expect(result.code).not.toMatch(/\bp-6\b/);
+		expect(result.code).not.toMatch(/defaultVariants:\s*\{[^}]*_smhash/);
+		expect(() =>
+			parse(result.code ?? "", {sourceType: "module"}),
+		).not.toThrow();
+	});
+
+	it("ignores helpers that are not in the target set", () => {
+		const result = transformJs(`other("flex");`, new Set(["cn"]));
+		expect(result.code).toBeNull();
+	});
+
+	it("returns null when parsing fails", () => {
+		expect(transformJs("const x = {", new Set(["cn"]))).toEqual({
+			code: null,
+			map: null,
+		});
+	});
+
+	it("is idempotent and does not inject a second runtime import", () => {
+		const once = transformJs(`cn("flex");`, new Set(["cn"]));
+		expect(once.code).toContain(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime"`,
+		);
+		expect(once.code).toContain("_twAtomicReconcile(cn(");
+
+		const twice = transformJs(once.code ?? "", new Set(["cn"]));
+		expect(twice.code).toBeNull();
+
+		const already = transformJs(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";\ncn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(already.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+		expect(already.code).not.toMatch(
+			/_twAtomicReconcile\(\s*_twAtomicReconcile/,
+		);
+	});
+
+	it("injects require() when asked for CJS runtime imports", () => {
+		const result = transformJs(`cn("flex");`, new Set(["cn"]), {
+			runtimeImport: "cjs",
+		});
+		expect(result.code).toMatch(
+			/require\(["']tailwindcss-atomic\/runtime["']\)/,
+		);
+		expect(result.code).toContain("_twAtomicReconcile");
+		expect(result.code).not.toMatch(
+			/import\s*\{[^}]*atomicReconcile[^}]*\}\s*from\s*["']tailwindcss-atomic\/runtime["']/,
+		);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+	});
+
+	it("does not inject a runtime import when wrapping is skipped", () => {
+		const result = transformJs(`cn("flex");`, new Set(["cn"]), {
+			runtimeImport: false,
+		});
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+	});
+
+	it("does not wrap cva() with the runtime helper", () => {
+		ATOMIC_RUNTIME.classMap["rounded"] = "_round1";
+		const result = transformJs(
+			`'use client';\nimport { cva } from 'class-variance-authority';\nvar alertCva = cva("flex rounded");`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("_aaaaaa _round1");
+		expect(result.code).not.toMatch(/\brounded\b/);
+		expect(result.code).not.toContain("_twAtomicReconcile");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+		expect(result.code).toMatch(/['"]use client['"]/);
+	});
+
+	it("re-injects a missing runtime import after preserveModules dropped it", () => {
+		const result = transformJs(
+			`'use client';\nvar alertCva = _twAtomicReconcile(cva("flex"));`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime"`,
+		);
+		const clientAt = result.code?.search(/['"]use client['"]/) ?? -1;
+		const importAt = result.code?.indexOf("tailwindcss-atomic/runtime") ?? -1;
+		expect(clientAt).toBeGreaterThanOrEqual(0);
+		expect(importAt).toBeGreaterThan(clientAt);
+		expect(result.code).not.toMatch(/atomicReconcile\(\s*_twAtomicReconcile/);
+	});
+
+	it("does not double-wrap when Rollup dealiases atomicReconcile", () => {
+		const result = transformJs(
+			`import { atomicReconcile } from "tailwindcss-atomic/runtime";\nvar alertCva = atomicReconcile(cva("flex"));`,
+			new Set(["cva"]),
+		);
+		expect(result.code).toContain("atomicReconcile(cva(");
+		expect(result.code).not.toMatch(/_twAtomicReconcile\s*\(/);
+		expect(result.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+	});
+
+	it("aliases _twAtomicReconcile onto an existing atomicReconcile import when wrapping cn", () => {
+		const result = transformJs(
+			`import { atomicReconcile } from "tailwindcss-atomic/runtime";\ncn("flex");`,
+			new Set(["cn"]),
+		);
+		expect(result.code?.match(/tailwindcss-atomic\/runtime/g)).toHaveLength(1);
+		expect(result.code).toContain("_twAtomicReconcile(cn(");
+		expect(result.code).toMatch(/atomicReconcile as _twAtomicReconcile/);
+	});
+
+	it("unhashes library output so the consuming app can generate CSS", () => {
+		ATOMIC_RUNTIME.classMap["bg-neutral-300"] = "_ce2951";
+		ATOMIC_RUNTIME.classMap["bg-opacity-50"] = "_983484";
+		ATOMIC_RUNTIME.classMap["rounded-lg"] = "_9e0aea";
+		const result = transformJs(
+			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";\ncx("ui-latamwin-skeleton-item _9e0aea _983484 _ce2951");`,
+			new Set(["cx"]),
+			{unhash: true},
+		);
+		expect(result.code).toContain(
+			"ui-latamwin-skeleton-item rounded-lg bg-opacity-50 bg-neutral-300",
+		);
+		expect(result.code).not.toContain("_ce2951");
+		expect(result.code).not.toContain("_twAtomicReconcile");
+		expect(result.code).not.toContain("tailwindcss-atomic/runtime");
+		expect(result.code).toContain("cx(");
+	});
+});
+
+describe("invalidateJsModules", () => {
+	it("no-ops without a Vite module graph", () => {
+		expect(() => invalidateJsModules()).not.toThrow();
+	});
+
+	it("invalidates JS modules and skips CSS or empty entries", () => {
+		const invalidateModule = vi.fn();
+		ATOMIC_RUNTIME.viteServer = {
+			moduleGraph: {
+				idToModuleMap: new Map<string, unknown>([
+					["src/app.tsx", {id: "src/app.tsx"}],
+					["src/pages/index.astro", {id: "src/pages/index.astro"}],
+					["src/app.css", {id: "src/app.css"}],
+					["src/empty.ts", null],
+				]),
+				invalidateModule,
+			},
+		};
+
+		invalidateJsModules();
+		expect(invalidateModule).toHaveBeenCalledTimes(2);
+		expect(invalidateModule).toHaveBeenCalledWith({id: "src/app.tsx"});
+		expect(invalidateModule).toHaveBeenCalledWith({
+			id: "src/pages/index.astro",
+		});
+	});
+
+	it("invalidates webpack watchers in Next.js dev", () => {
+		const invalidate = vi.fn();
+		ATOMIC_RUNTIME.webpackWatchings.add({invalidate});
+		invalidateJsModules();
+		expect(invalidate).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores webpack watchers whose invalidate throws", () => {
+		ATOMIC_RUNTIME.webpackWatchings.add({
+			invalidate() {
+				throw new Error("closed");
+			},
+		});
+		expect(() => invalidateJsModules()).not.toThrow();
+	});
+});

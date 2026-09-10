@@ -1,0 +1,415 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+import {ATOMIC_RUNTIME} from "../src/engine/constants";
+
+const noopPlugin = `"use strict";
+function plugin() {
+	return {postcssPlugin: "fake-plugin", Once() {}};
+}
+plugin.postcss = true;
+module.exports = plugin;
+`;
+
+const defaultExportPlugin = `"use strict";
+function plugin() {
+	return {postcssPlugin: "fake-plugin", Once() {}};
+}
+plugin.postcss = true;
+exports.default = plugin;
+`;
+
+const throwingPlugin = `"use strict";
+function plugin() {
+	return {
+		postcssPlugin: "boom",
+		Once() {
+			throw new Error("warmup boom");
+		},
+	};
+}
+plugin.postcss = true;
+module.exports = plugin;
+`;
+
+const v4Trap = `"use strict";
+function plugin() {
+	throw new Error("It looks like you're trying to use \`tailwindcss\` directly as a PostCSS plugin. The PostCSS plugin has moved to a separate package, so to continue using Tailwind CSS with PostCSS you'll need to install \`@tailwindcss/postcss\` and update your PostCSS configuration.");
+}
+module.exports = plugin;
+`;
+
+const v4Compiler = `"use strict";
+exports.compile = async function compile() {
+	return {
+		root: null,
+		sources: [],
+		build(candidates) {
+			if (!Array.isArray(candidates) || !candidates.includes("flex")) {
+				return "/* empty */";
+			}
+			return ".flex { display: flex }\\n.p-6 { padding: 1.5rem }";
+		},
+	};
+};
+`;
+
+const oxideScanner = `"use strict";
+class Scanner {
+	scan() {
+		return ["flex", "p-6"];
+	}
+}
+exports.Scanner = Scanner;
+`;
+
+const expandingTailwindPlugin = `"use strict";
+function plugin() {
+	return {
+		postcssPlugin: "tailwindcss",
+		Once(root) {
+			let saw = false;
+			root.walkAtRules("tailwind", () => {
+				saw = true;
+			});
+			if (!saw) return;
+			root.removeAll();
+			root.append(".flex { display: flex }");
+			root.append(".relative { position: relative }");
+			root.append(".flex-col { flex-direction: column }");
+			root.append(".p-6 { padding: 1.5rem }");
+		},
+	};
+}
+plugin.postcss = true;
+module.exports = plugin;
+`;
+
+const scssEntry = `@use 'tailwindcss/base';
+@use "tailwindcss/components";
+@use 'tailwindcss/utilities';
+@use './themes/brand' as themes;
+`;
+
+const fixtures: string[] = [];
+
+function writeModule(root: string, id: string, source: string) {
+	const dir = path.join(root, "node_modules", ...id.split("/"));
+	fs.mkdirSync(dir, {recursive: true});
+	fs.writeFileSync(
+		path.join(dir, "package.json"),
+		JSON.stringify({name: id, main: "index.js"}),
+	);
+	fs.writeFileSync(path.join(dir, "index.js"), source);
+}
+
+function writeNestedModule(
+	root: string,
+	parent: string,
+	id: string,
+	source: string,
+) {
+	writeModule(
+		path.join(root, "node_modules", ...parent.split("/")),
+		id,
+		source,
+	);
+}
+
+function makeApp(
+	options: {
+		modules?: Record<string, string>;
+		skipPackageJson?: boolean;
+		skipDefaultCss?: boolean;
+		cssEntry?: {rel: string; source: string};
+	} = {},
+) {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "atomic-warmup-"));
+	fixtures.push(root);
+	if (!options.skipDefaultCss) {
+		fs.mkdirSync(path.join(root, "app"), {recursive: true});
+		fs.writeFileSync(
+			path.join(root, "app/globals.css"),
+			".flex { display: flex }",
+		);
+	}
+	if (options.cssEntry) {
+		const abs = path.join(root, options.cssEntry.rel);
+		fs.mkdirSync(path.dirname(abs), {recursive: true});
+		fs.writeFileSync(abs, options.cssEntry.source);
+	}
+	if (!options.skipPackageJson) {
+		fs.writeFileSync(
+			path.join(root, "package.json"),
+			JSON.stringify({name: "fixture-app"}),
+		);
+	}
+	for (const [id, source] of Object.entries(options.modules ?? {})) {
+		writeModule(root, id, source);
+	}
+	return root;
+}
+
+async function getWarmup() {
+	vi.resetModules();
+	ATOMIC_RUNTIME.classMap = Object.create(null);
+	const css = await vi.importActual<typeof import("../src/engine/css")>(
+		"../src/engine/css",
+	);
+	return css.warmupClassMapFromCss;
+}
+
+function pointAt(root: string) {
+	process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = root;
+	process.env["INIT_CWD"] = root;
+	ATOMIC_RUNTIME.projectRoots = [root];
+}
+
+afterEach(() => {
+	for (const dir of fixtures) {
+		fs.rmSync(dir, {recursive: true, force: true});
+	}
+	fixtures.length = 0;
+	delete process.env["INIT_CWD"];
+});
+
+describe("warmupClassMapFromCss", () => {
+	it("returns immediately when the class map is already warm", async () => {
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		const warmup = await getWarmup();
+		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toBe("_aaaaaa");
+	});
+
+	it("reuses an in-flight warmup promise", async () => {
+		const root = makeApp({modules: {tailwindcss: noopPlugin}});
+		pointAt(root);
+		const warmup = await getWarmup();
+		const first = warmup();
+		const second = warmup();
+		await Promise.all([first, second]);
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("loads an app PostCSS config when postcss-load-config succeeds", async () => {
+		const root = makeApp({
+			modules: {
+				"postcss-load-config": `"use strict";
+const plugin = () => ({postcssPlugin: "from-config", Once() {}});
+plugin.postcss = true;
+module.exports = async () => ({plugins: [plugin]});
+`,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap).toEqual({});
+	});
+
+	it("falls through when postcss-load-config returns no plugins", async () => {
+		const root = makeApp({
+			modules: {
+				"postcss-load-config": `"use strict";
+module.exports = async () => ({plugins: []});
+`,
+				"@tailwindcss/postcss": defaultExportPlugin,
+				autoprefixer: noopPlugin,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("uses @tailwindcss/postcss without a default export", async () => {
+		const root = makeApp({
+			modules: {"@tailwindcss/postcss": noopPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("falls back to tailwindcss when the v4 plugin is missing", async () => {
+		const root = makeApp({modules: {tailwindcss: noopPlugin}});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("does not use Tailwind CSS v4 as a PostCSS plugin", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const root = makeApp({modules: {tailwindcss: v4Trap}});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("warms the class map via @tailwindcss/node when PostCSS Tailwind is missing", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "src/index.css",
+				source: '@import "tailwindcss";',
+			},
+			modules: {
+				tailwindcss: v4Trap,
+				"@tailwindcss/node": v4Compiler,
+				"@tailwindcss/oxide": oxideScanner,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+		expect(ATOMIC_RUNTIME.classMap["p-6"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("resolves @tailwindcss/node from @tailwindcss/vite in pnpm layouts", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "src/index.css",
+				source: '@import "tailwindcss";',
+			},
+			modules: {
+				tailwindcss: v4Trap,
+				"@tailwindcss/vite": `"use strict";\nmodule.exports = {};\n`,
+			},
+		});
+		writeNestedModule(root, "@tailwindcss/vite", "@tailwindcss/node", v4Compiler);
+		writeNestedModule(
+			root,
+			"@tailwindcss/vite",
+			"@tailwindcss/oxide",
+			oxideScanner,
+		);
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("returns when neither Tailwind package can be required", async () => {
+		const root = makeApp();
+		pointAt(root);
+		const warmup = await getWarmup();
+		await expect(warmup()).resolves.toBeUndefined();
+	});
+
+	it("swallows warmup failures and warns", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+		const root = makeApp({
+			modules: {"@tailwindcss/postcss": throwingPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(warn).toHaveBeenCalledWith(
+			"[tailwind-atomic] warmup failed:",
+			expect.any(Error),
+		);
+		warn.mockRestore();
+	});
+
+	it("uses the CSS folder as package dir when no package.json exists", async () => {
+		const root = makeApp({skipPackageJson: true});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await expect(warmup()).resolves.toBeUndefined();
+	});
+
+	it("warms from an explicit cssEntries path that is not a default candidate", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "design/tokens.css",
+				source: ".flex { display: flex }",
+			},
+			modules: {tailwindcss: noopPlugin},
+		});
+		pointAt(root);
+		ATOMIC_RUNTIME.cssEntries = ["design/tokens.css"];
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("warms the class map from SCSS @use tailwindcss layers (Next 15 + Tailwind 3)", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {tailwindcss: expandingTailwindPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("still warms from app/globals.css with @tailwind directives", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {
+				rel: "app/globals.css",
+				source: "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
+			},
+			modules: {tailwindcss: expandingTailwindPlugin},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("compiles local SCSS @use via optional sass before PostCSS", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {
+				tailwindcss: expandingTailwindPlugin,
+				sass: `"use strict";
+module.exports = {
+	compileString(source) {
+		return {
+			css: source.replace(/@use\\s+['"]\\.\\/themes\\/[^'"]+['"][^;]*;/g, "/* local */"),
+		};
+	},
+};
+`,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+
+	it("falls through postcss-load-config when @use did not populate the map", async () => {
+		const root = makeApp({
+			skipDefaultCss: true,
+			cssEntry: {rel: "scss/styles.scss", source: scssEntry},
+			modules: {
+				"postcss-load-config": `"use strict";
+const plugin = () => ({postcssPlugin: "from-config", Once() {}});
+plugin.postcss = true;
+module.exports = async () => ({plugins: [plugin]});
+`,
+				tailwindcss: expandingTailwindPlugin,
+			},
+		});
+		pointAt(root);
+		const warmup = await getWarmup();
+		await warmup();
+		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
+	});
+});

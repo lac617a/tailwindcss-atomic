@@ -5,7 +5,7 @@
 	"packageManager": "pnpm@8.15.0",
 	"scripts": {
 		"build": "pnpm build:wasm && pnpm build:js",
-		"build:wasm": "wasm-pack build crates/tailwind-atomic-wasm --target nodejs --no-pack --out-dir ../../packages/pkg && node -e \"const fs=require('fs');fs.writeFileSync('packages/pkg/package.json',JSON.stringify({type:'commonjs'}));try{fs.unlinkSync('packages/pkg/.gitignore')}catch(e){}\"",
+		"build:wasm": "wasm-pack build crates/tailwind-atomic-wasm --target nodejs --no-pack --out-dir ../../packages/tailwindcss-atomic/pkg && node -e \"const fs=require('fs');fs.writeFileSync('packages/tailwindcss-atomic/pkg/package.json',JSON.stringify({type:'commonjs'}));try{fs.unlinkSync('packages/tailwindcss-atomic/pkg/.gitignore')}catch(e){}\"",
 		"build:js": "pnpm --filter tailwindcss-atomic build",
 		"dev": "pnpm --filter next-app dev",
 		"dev:vite": "pnpm --filter vite-app dev",

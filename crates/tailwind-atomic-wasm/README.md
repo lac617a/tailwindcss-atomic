@@ -8,4 +8,4 @@ Build the npm artifact:
 pnpm build:wasm
 ```
 
-That writes `packages/pkg/` (`tailwind_atomic_wasm.js` + `.wasm`) for `tailwindcss-atomic`.
+That writes `packages/tailwindcss-atomic/pkg/` (`tailwind_atomic_wasm.js` + `.wasm`) for `tailwindcss-atomic`.

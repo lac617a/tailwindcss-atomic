@@ -31,7 +31,7 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | --- | --- |
 | `crates/tailwind-atomic/` | Crate Rust puro (`lightningcss`): atomiciza CSS, reescribe class strings y HTML. Publicable en crates.io |
 | `crates/tailwind-atomic-wasm/` | Bindings `wasm-bindgen` que consume el crate anterior |
-| `packages/` | Paquete npm `tailwindcss-atomic` |
+| `packages/tailwindcss-atomic/` | Paquete npm `tailwindcss-atomic` (adapters + engine) |
 | `app/next-app/` | Next.js 15 · App Router · Tailwind 4 |
 | `app/vite-app/` | Vite · React 18 · Tailwind 3 |
 | `app/next12-app/` | Next.js 12 · Pages Router · Tailwind 3 |
@@ -40,9 +40,9 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 | `app/astro-app/` | Astro 5 · Tailwind 4 |
 | `website/` | Docs (Nextra) · [atomic.profiya.com](https://atomic.profiya.com/) |
 
-SCSS con `@use 'tailwindcss/base|components|utilities'` (Tailwind 3 + Next 15) está documentado en [`packages/README.md`](packages/README.md).
+SCSS con `@use 'tailwindcss/base|components|utilities'` (Tailwind 3 + Next 15) está documentado en [`packages/tailwindcss-atomic/README.md`](packages/tailwindcss-atomic/README.md).
 
-La guía de uso de la librería está en [`packages/README.md`](packages/README.md).
+La guía de uso de la librería está en [`packages/tailwindcss-atomic/README.md`](packages/tailwindcss-atomic/README.md).
 
 ## Requisitos
 
@@ -55,8 +55,8 @@ La guía de uso de la librería está en [`packages/README.md`](packages/README.
 ```bash
 pnpm install
 pnpm build          # WASM + JavaScript
-pnpm build:wasm     # required once before Vitest (`packages/pkg` is gitignored)
-pnpm test           # Vitest (packages/__test__); uses the real WASM grammar
+pnpm build:wasm     # required once before Vitest (`packages/tailwindcss-atomic/pkg` is gitignored)
+pnpm test           # Vitest (packages/tailwindcss-atomic/__test__); uses the real WASM grammar
 pnpm test:rust      # cargo test --workspace (crate + WASM bindings)
 pnpm test:coverage  # coverage lcov para Codecov
 pnpm dev            # Next 15 · http://localhost:3016
@@ -72,7 +72,7 @@ pnpm dev:examples   # todos los ejemplos a la vez (Turborepo)
 Scripts sueltos:
 
 ```bash
-pnpm build:wasm     # wasm-pack → packages/pkg
+pnpm build:wasm     # wasm-pack → packages/tailwindcss-atomic/pkg
 pnpm build:js       # tsdown (ESM + CJS)
 ```
 

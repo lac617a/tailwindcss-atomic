@@ -12,7 +12,7 @@ pkg
 
 # testing
 coverage
-packages/loader.cjs
+packages/tailwindcss-atomic/loader.cjs
 
 # next.js
 .next/

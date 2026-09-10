@@ -28,7 +28,7 @@ fn printer_options() -> PrinterOptions<'static> {
 
 fn parser_options<'i>() -> ParserOptions<'i> {
     ParserOptions {
-        filename: String::from("tailwind-atomic.css"),
+        filename: String::from("tailwindcss-atomic.css"),
         flags: ParserFlags::NESTING,
         error_recovery: true,
         ..ParserOptions::default()

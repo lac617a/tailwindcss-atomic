@@ -161,7 +161,7 @@ async function getWarmup() {
 }
 
 function pointAt(root: string) {
-	process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = root;
+	process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = root;
 	process.env["INIT_CWD"] = root;
 	ATOMIC_RUNTIME.projectRoots = [root];
 }
@@ -314,7 +314,7 @@ module.exports = async () => ({plugins: []});
 		const warmup = await getWarmup();
 		await warmup();
 		expect(warn).toHaveBeenCalledWith(
-			"[tailwind-atomic] warmup failed:",
+			"[tailwindcss-atomic] warmup failed:",
 			expect.any(Error),
 		);
 		warn.mockRestore();

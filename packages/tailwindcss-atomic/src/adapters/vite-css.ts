@@ -42,7 +42,7 @@ async function transformViteCss(code: string, id: string) {
  */
 function createViteCssAtomicPlugin() {
 	return {
-		name: "tailwind-atomic-css",
+		name: "tailwindcss-atomic-css",
 		enforce: "pre" as const,
 		async transform(code: string, id: string) {
 			return transformViteCss(code, id);

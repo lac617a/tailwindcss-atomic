@@ -1,19 +1,19 @@
 [package]
-name = "tailwind-atomic-wasm"
+name = "tailwindcss-atomic-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "WebAssembly bindings for the tailwind-atomic CSS compiler"
+description = "WebAssembly bindings for the tailwindcss-atomic CSS compiler"
 publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-tailwind-atomic = { path = "../tailwind-atomic", version = "0.1.1" }
+tailwindcss-atomic = { path = "../tailwindcss-atomic", version = "0.1.1" }
 wasm-bindgen = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6"

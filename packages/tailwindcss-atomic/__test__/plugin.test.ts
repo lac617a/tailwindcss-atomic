@@ -30,7 +30,7 @@ describe("plugin adapters", () => {
 	it("returns a CSS pre-plugin plus the unplugin Vite adapter", () => {
 		const plugins = vite();
 		expect(Array.isArray(plugins)).toBe(true);
-		expect(plugins[0]?.name).toBe("tailwind-atomic-css");
+		expect(plugins[0]?.name).toBe("tailwindcss-atomic-css");
 		expect(plugins[0]?.enforce).toBe("pre");
 		expect(typeof plugins[1]).toBe("object");
 	});
@@ -42,20 +42,20 @@ describe("plugin adapters", () => {
 			loadInclude?: (id: string) => boolean;
 		};
 		expect(plugin.resolveId?.("tailwindcss-atomic/runtime")).toBe(
-			"\0tailwind-atomic-runtime",
+			"\0tailwindcss-atomic-runtime",
 		);
 		expect(plugin.resolveId?.("tailwindcss-atomic/runtime?v=1")).toBe(
-			"\0tailwind-atomic-runtime",
+			"\0tailwindcss-atomic-runtime",
 		);
 		ATOMIC_RUNTIME.classMap["flex"] = "_aaaaaa";
-		const source = plugin.load?.("\0tailwind-atomic-runtime");
+		const source = plugin.load?.("\0tailwindcss-atomic-runtime");
 		expect(source).toContain("atomicReconcile");
 		expect(source).toContain("_aaaaaa");
 		expect(source).not.toContain('from "tailwind-merge"');
 
-		const encoded = encodeURIComponent("\0tailwind-atomic-runtime");
+		const encoded = encodeURIComponent("\0tailwindcss-atomic-runtime");
 		const webpackId = `/tmp/app/_virtual_${encoded}`;
-		expect(plugin.loadInclude?.("\0tailwind-atomic-runtime")).toBe(true);
+		expect(plugin.loadInclude?.("\0tailwindcss-atomic-runtime")).toBe(true);
 		expect(plugin.loadInclude?.(webpackId)).toBe(true);
 		expect(plugin.loadInclude?.(`C:\\tmp\\app\\_virtual_${encoded}`)).toBe(
 			true,
@@ -79,7 +79,7 @@ describe("transformViteCss", () => {
 			".flex { display: flex }",
 			"src/index.css",
 		);
-		expect(result?.code).toContain("/*! tailwind-atomic */");
+		expect(result?.code).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 
 		expect(

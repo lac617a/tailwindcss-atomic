@@ -16,7 +16,7 @@ pnpm dev:astro
 ## Qué mirar
 
 1. Inspecciona el DOM: `class` no debería mostrar `flex` ni `bg-zinc-950`, sino hashes `_` + 6 hex.
-2. El CSS compilado lleva `/*! tailwind-atomic */` y reglas `._aa7b5f { … }`.
+2. El CSS compilado lleva `/*! tailwindcss-atomic */` y reglas `._aa7b5f { … }`.
 3. El botón con `cn()` también se reescribe en activo/inactivo.
 
 Config:

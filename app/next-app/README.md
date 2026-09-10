@@ -22,7 +22,7 @@ pnpm --filter next-app dev
 ## Qué mirar
 
 1. Inspecciona el DOM: `className` no debería mostrar `flex` ni `bg-zinc-950`, sino hashes `_` + 6 hex.
-2. El CSS compilado lleva el comentario `/*! tailwind-atomic */` y reglas `._aa7b5f { … }`.
+2. El CSS compilado lleva el comentario `/*! tailwindcss-atomic */` y reglas `._aa7b5f { … }`.
 3. El chip con `cn()` también se reescribe (incluye el estado activo/inactivo).
 
 La config relevante:

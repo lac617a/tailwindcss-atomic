@@ -6,7 +6,7 @@
 
 Monorepo de **tailwindcss-atomic**: un plugin que parte el CSS de Tailwind en declaraciones atómicas y reescribe los `className` del código a hashes cortos (`_aa7b5f`).
 
-El motor de hashing y atomicización vive en **Rust** (`crates/tailwind-atomic`), con bindings **WebAssembly** (`crates/tailwind-atomic-wasm`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
+El motor de hashing y atomicización vive en **Rust** (`crates/tailwindcss-atomic`), con bindings **WebAssembly** (`crates/tailwindcss-atomic-wasm`). El empaquetado JavaScript (PostCSS + unplugin) conecta ese motor con Vite, Webpack, Rollup, esbuild, Next.js y Astro.
 
 ## Qué hace
 
@@ -29,8 +29,8 @@ El prefijo `_` evita clases que empiecen por dígito (inválidas en CSS). El suf
 
 | Ruta | Contenido |
 | --- | --- |
-| `crates/tailwind-atomic/` | Crate Rust puro (`lightningcss`): atomiciza CSS, reescribe class strings y HTML. Publicable en crates.io |
-| `crates/tailwind-atomic-wasm/` | Bindings `wasm-bindgen` que consume el crate anterior |
+| `crates/tailwindcss-atomic/` | Crate Rust puro (`lightningcss`): atomiciza CSS, reescribe class strings y HTML. Publicable en crates.io |
+| `crates/tailwindcss-atomic-wasm/` | Bindings `wasm-bindgen` que consume el crate anterior |
 | `packages/tailwindcss-atomic/` | Paquete npm `tailwindcss-atomic` (adapters + engine) |
 | `app/next-app/` | Next.js 15 · App Router · Tailwind 4 |
 | `app/vite-app/` | Vite · React 18 · Tailwind 3 |

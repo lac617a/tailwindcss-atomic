@@ -3,6 +3,7 @@ import {
 	isVirtualRuntimeLoadId,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
+	LEGACY_VIRTUAL_RUNTIME_RESOLVED,
 } from "../src/engine/virtual-runtime";
 
 describe("isVirtualRuntimeLoadId", () => {
@@ -15,12 +16,13 @@ describe("isVirtualRuntimeLoadId", () => {
 		).toBe(true);
 		expect(
 			isVirtualRuntimeLoadId(
-				`/tmp/app/__virtual__/tailwind-atomic-plugin/${encoded}`,
+				`/tmp/app/__virtual__/tailwindcss-atomic-plugin/${encoded}`,
 			),
 		).toBe(true);
 		expect(
 			isVirtualRuntimeLoadId(`/tmp/app/_virtual_${encoded}?v=1`),
 		).toBe(true);
+		expect(isVirtualRuntimeLoadId(LEGACY_VIRTUAL_RUNTIME_RESOLVED)).toBe(true);
 	});
 
 	it("rejects JSON, app source, and unrelated virtual files", () => {

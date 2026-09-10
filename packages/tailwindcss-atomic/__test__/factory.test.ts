@@ -95,17 +95,17 @@ describe("transformAtomicSource", () => {
 describe("factory plugin", () => {
 	it("registers the plugin name and post enforce", () => {
 		const plugin = createPlugin();
-		expect(plugin.name).toBe("tailwind-atomic-plugin");
+		expect(plugin.name).toBe("tailwindcss-atomic-plugin");
 		expect(plugin.enforce).toBe("post");
 	});
 
 	it("limits loadInclude to the virtual runtime so JSON keeps webpack's json type", () => {
 		const plugin = createPlugin();
-		expect(plugin.loadInclude("\0tailwind-atomic-runtime")).toBe(true);
+		expect(plugin.loadInclude("\0tailwindcss-atomic-runtime")).toBe(true);
 		expect(plugin.loadInclude("messages/en.json")).toBe(false);
 		expect(plugin.loadInclude("/app/messages/index.json")).toBe(false);
 		expect(plugin.resolveId("tailwindcss-atomic/runtime")).toBe(
-			"\0tailwind-atomic-runtime",
+			"\0tailwindcss-atomic-runtime",
 		);
 	});
 
@@ -172,7 +172,7 @@ describe("factory plugin", () => {
 		expect(await plugin.transform("export const x = 1", "app.css")).toBeNull();
 
 		const atomic = await plugin.transform(".flex { display: flex }", "app.css");
-		expect(atomic?.code).toContain("/*! tailwind-atomic */");
+		expect(atomic?.code).toContain("/*! tailwindcss-atomic */");
 
 		expect(await plugin.transform(":root{color:red}", "app.css")).toBeNull();
 	});
@@ -256,7 +256,7 @@ describe("factory plugin", () => {
 		};
 
 		plugin.rollup.generateBundle({}, bundle);
-		expect(String(bundle["main.css"]?.source)).toContain("/*! tailwind-atomic */");
+		expect(String(bundle["main.css"]?.source)).toContain("/*! tailwindcss-atomic */");
 		expect(bundle["main.js"]?.code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 		expect(String(bundle["index.html"]?.source)).toContain(
 			ATOMIC_RUNTIME.classMap["flex"],
@@ -301,27 +301,27 @@ describe("factory plugin", () => {
 				facadeModuleId?: string;
 			}
 		> = {
-			"_virtual/tailwind-atomic-runtime.js": {
+			"_virtual/tailwindcss-atomic-runtime.js": {
 				type: "chunk",
-				fileName: "_virtual/tailwind-atomic-runtime.js",
-				facadeModuleId: "\0tailwind-atomic-runtime",
+				fileName: "_virtual/tailwindcss-atomic-runtime.js",
+				facadeModuleId: "\0tailwindcss-atomic-runtime",
 				code: "export function atomicReconcile(value) { return value; }",
 			},
 			"components/alert.js": {
 				type: "chunk",
 				fileName: "components/alert.js",
-				code: `'use client';\nimport { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwind-atomic-runtime.js";\nvar alertCva = _twAtomicReconcile(cva("flex"));`,
+				code: `'use client';\nimport { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwindcss-atomic-runtime.js";\nvar alertCva = _twAtomicReconcile(cva("flex"));`,
 			},
 		};
 
 		plugin.rollup.generateBundle({preserveModules: true}, bundle);
-		expect(bundle["_virtual/tailwind-atomic-runtime.js"]).toBeUndefined();
+		expect(bundle["_virtual/tailwindcss-atomic-runtime.js"]).toBeUndefined();
 		expect(bundle["components/alert.js"]?.code).toContain("cva(");
 		expect(bundle["components/alert.js"]?.code).toContain("flex");
 		expect(bundle["components/alert.js"]?.code).not.toContain("_aaaaaa");
 		expect(bundle["components/alert.js"]?.code).not.toContain("_twAtomicReconcile");
 		expect(bundle["components/alert.js"]?.code).not.toContain(
-			"tailwind-atomic-runtime",
+			"tailwindcss-atomic-runtime",
 		);
 		expect(bundle["components/alert.js"]?.code).not.toContain(
 			"tailwindcss-atomic/runtime",
@@ -334,15 +334,15 @@ describe("factory plugin", () => {
 	it("keeps the virtual runtime chunk when preserveModules is off", () => {
 		const plugin = createPlugin();
 		const bundle = {
-			"_virtual/tailwind-atomic-runtime.js": {
+			"_virtual/tailwindcss-atomic-runtime.js": {
 				type: "chunk" as const,
-				fileName: "_virtual/tailwind-atomic-runtime.js",
-				facadeModuleId: "\0tailwind-atomic-runtime",
+				fileName: "_virtual/tailwindcss-atomic-runtime.js",
+				facadeModuleId: "\0tailwindcss-atomic-runtime",
 				code: "export function atomicReconcile(value) { return value; }",
 			},
 		};
 		plugin.rollup.generateBundle({}, bundle);
-		expect(bundle["_virtual/tailwind-atomic-runtime.js"]).toBeDefined();
+		expect(bundle["_virtual/tailwindcss-atomic-runtime.js"]).toBeDefined();
 	});
 
 	it("invalidates JS modules after CSS is atomicized", async () => {
@@ -437,7 +437,7 @@ describe("factory webpack hook", () => {
 		};
 
 		plugin.webpack(compiler);
-		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe("/tmp/app");
+		expect(process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"]).toBe("/tmp/app");
 		expect(ATOMIC_RUNTIME.projectRoots).toContain("/tmp/app");
 
 		await beforeCompile?.();
@@ -467,14 +467,14 @@ describe("factory webpack hook", () => {
 				source: () => Buffer.from(`cn("flex")`).toString(),
 			},
 		});
-		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
+		expect(updated["main.css"]).toContain("/*! tailwindcss-atomic */");
 		expect(updated["main.js"]).toBeUndefined();
 		expect(updated["buffer.js"]).toBeUndefined();
 		expect(updated["index.html"]).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 	});
 
 	it("skips webpack context and assets that do not need work", async () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/already";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/already";
 		const plugin = createPlugin();
 		const updated: Record<string, string> = {};
 		let processAssets:
@@ -528,7 +528,7 @@ describe("factory webpack hook", () => {
 		});
 
 		expect(ATOMIC_RUNTIME.projectRoots).not.toContain("");
-		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe("/already");
+		expect(process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"]).toBe("/already");
 
 		loaderTap?.({}, {resource: "/tmp/app.css", loaders: []});
 		loaderTap?.({}, {
@@ -546,7 +546,7 @@ describe("factory webpack hook", () => {
 			"lib.cjs": {source: () => `cn("flex")`},
 		});
 		expect(updated["plain.css"]).toBeUndefined();
-		expect(updated["buffer.css"]).toContain("/*! tailwind-atomic */");
+		expect(updated["buffer.css"]).toContain("/*! tailwindcss-atomic */");
 		expect(updated["lib.mjs"]).toBeUndefined();
 		expect(updated["lib.cjs"]).toBeUndefined();
 	});
@@ -613,7 +613,7 @@ describe("factory webpack hook", () => {
 			},
 		});
 
-		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
+		expect(updated["main.css"]).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["py-2"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["px-4"]).toMatch(/^_[0-9a-f]{6}$/);
@@ -888,7 +888,7 @@ describe("factory webpack hook", () => {
 		});
 
 		expect(updated["static/css/slick.css"]).toBeUndefined();
-		expect(updated["main.css"]).toContain("/*! tailwind-atomic */");
+		expect(updated["main.css"]).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 	});

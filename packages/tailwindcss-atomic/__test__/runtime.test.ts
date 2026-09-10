@@ -89,9 +89,9 @@ describe("atomicReconcile runtime", () => {
 
 describe("preserveModules runtime specifiers", () => {
 	it("detects emitted virtual runtime chunks", () => {
-		expect(isEmittedVirtualRuntimePath("\0tailwind-atomic-runtime")).toBe(true);
+		expect(isEmittedVirtualRuntimePath("\0tailwindcss-atomic-runtime")).toBe(true);
 		expect(
-			isEmittedVirtualRuntimePath("_virtual/tailwind-atomic-runtime.js"),
+			isEmittedVirtualRuntimePath("_virtual/tailwindcss-atomic-runtime.js"),
 		).toBe(true);
 		expect(isEmittedVirtualRuntimePath("tailwindcss-atomic/runtime")).toBe(
 			false,
@@ -102,7 +102,7 @@ describe("preserveModules runtime specifiers", () => {
 	it("rewrites relative virtual imports to the package subpath", () => {
 		expect(
 			rewriteEmittedRuntimeImports(
-				`import { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwind-atomic-runtime.js";`,
+				`import { atomicReconcile as _twAtomicReconcile } from "../_virtual/tailwindcss-atomic-runtime.js";`,
 			),
 		).toBe(
 			`import { atomicReconcile as _twAtomicReconcile } from "tailwindcss-atomic/runtime";`,

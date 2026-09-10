@@ -2,12 +2,22 @@ import {createRequire} from "node:module";
 import {readFileSync} from "node:fs";
 import path from "node:path";
 
-import {ATOMIC_RUNTIME} from "./constants";
+import {ATOMIC_RUNTIME, readProjectRootEnv} from "./constants";
 
 /** Package subpath — Turbopack treats `virtual:` as an unsupported external. */
 const VIRTUAL_RUNTIME_IMPORT = "tailwindcss-atomic/runtime";
-const VIRTUAL_RUNTIME_RESOLVED = "\0tailwind-atomic-runtime";
+const VIRTUAL_RUNTIME_NAME = "tailwindcss-atomic-runtime";
+const LEGACY_VIRTUAL_RUNTIME_NAME = "tailwind-atomic-runtime";
+const VIRTUAL_RUNTIME_RESOLVED = `\0${VIRTUAL_RUNTIME_NAME}`;
+const LEGACY_VIRTUAL_RUNTIME_RESOLVED = `\0${LEGACY_VIRTUAL_RUNTIME_NAME}`;
 const RUNTIME_FN = "_twAtomicReconcile";
+
+function hasVirtualRuntimeName(value: string) {
+	return (
+		value.includes(VIRTUAL_RUNTIME_NAME) ||
+		value.includes(LEGACY_VIRTUAL_RUNTIME_NAME)
+	);
+}
 
 function posixId(id: string) {
 	return String(id).split("?")[0]?.replace(/\\/g, "/") ?? "";
@@ -28,12 +38,20 @@ function decodeUriComponentSafe(value: string) {
 function isVirtualRuntimeLoadId(id: string) {
 	const clean = posixId(id);
 	if (!clean) return false;
-	if (clean === VIRTUAL_RUNTIME_RESOLVED) return true;
+	if (
+		clean === VIRTUAL_RUNTIME_RESOLVED ||
+		clean === LEGACY_VIRTUAL_RUNTIME_RESOLVED
+	) {
+		return true;
+	}
 
 	const encoded = encodeURIComponent(VIRTUAL_RUNTIME_RESOLVED);
+	const legacyEncoded = encodeURIComponent(LEGACY_VIRTUAL_RUNTIME_RESOLVED);
 	if (
 		clean.endsWith(`_virtual_${encoded}`) ||
-		clean.endsWith(`_virtual_${VIRTUAL_RUNTIME_RESOLVED}`)
+		clean.endsWith(`_virtual_${VIRTUAL_RUNTIME_RESOLVED}`) ||
+		clean.endsWith(`_virtual_${legacyEncoded}`) ||
+		clean.endsWith(`_virtual_${LEGACY_VIRTUAL_RUNTIME_RESOLVED}`)
 	) {
 		return true;
 	}
@@ -42,8 +60,11 @@ function isVirtualRuntimeLoadId(id: string) {
 	const decodedBase = decodeUriComponentSafe(base);
 	const isRuntimeName =
 		decodedBase === VIRTUAL_RUNTIME_RESOLVED ||
+		decodedBase === LEGACY_VIRTUAL_RUNTIME_RESOLVED ||
 		base === encoded ||
-		base === "tailwind-atomic-runtime";
+		base === legacyEncoded ||
+		base === VIRTUAL_RUNTIME_NAME ||
+		base === LEGACY_VIRTUAL_RUNTIME_NAME;
 	if (!isRuntimeName) return false;
 
 	return clean.includes("_virtual_") || clean.includes("__virtual__");
@@ -52,11 +73,15 @@ function isVirtualRuntimeLoadId(id: string) {
 function isAtomicRuntimeModule(id: string) {
 	const clean = posixId(id);
 	if (!clean) return false;
-	if (clean === VIRTUAL_RUNTIME_IMPORT || clean === VIRTUAL_RUNTIME_RESOLVED) {
+	if (
+		clean === VIRTUAL_RUNTIME_IMPORT ||
+		clean === VIRTUAL_RUNTIME_RESOLVED ||
+		clean === LEGACY_VIRTUAL_RUNTIME_RESOLVED
+	) {
 		return true;
 	}
 	if (isVirtualRuntimeLoadId(id)) return true;
-	if (clean.includes("tailwind-atomic-runtime")) return true;
+	if (hasVirtualRuntimeName(clean)) return true;
 	return /(?:^|\/)atomic-runtime\.(mjs|cjs|js|mts|cts|ts)$/.test(clean);
 }
 
@@ -87,12 +112,16 @@ function shouldWrapWithRuntime(
 function isEmittedVirtualRuntimePath(id: string) {
 	const clean = posixId(id);
 	if (!clean) return false;
-	if (clean === VIRTUAL_RUNTIME_RESOLVED || clean.startsWith("\0")) {
-		return clean.includes("tailwind-atomic-runtime");
+	if (
+		clean === VIRTUAL_RUNTIME_RESOLVED ||
+		clean === LEGACY_VIRTUAL_RUNTIME_RESOLVED ||
+		clean.startsWith("\0")
+	) {
+		return hasVirtualRuntimeName(clean);
 	}
 	if (clean === VIRTUAL_RUNTIME_IMPORT) return false;
 	return (
-		clean.includes("tailwind-atomic-runtime") ||
+		hasVirtualRuntimeName(clean) ||
 		/(?:^|\/)_virtual_?\/?.*runtime/i.test(clean)
 	);
 }
@@ -100,17 +129,14 @@ function isEmittedVirtualRuntimePath(id: string) {
 /**
  * Published `preserveModules` builds must import the package subpath so the
  * consuming app (Next/Vite) can inject the real CLASS_MAP. Rollup otherwise
- * emits a relative `\0tailwind-atomic-runtime` chunk that is not a real file.
+ * emits a relative `\0tailwindcss-atomic-runtime` chunk that is not a real file.
  */
 function rewriteEmittedRuntimeImports(code: string) {
-	if (
-		!code.includes("tailwind-atomic-runtime") &&
-		!code.includes("\0tailwind-atomic-runtime")
-	) {
+	if (!hasVirtualRuntimeName(code) && !code.includes("\0")) {
 		return code;
 	}
 	return code.replace(
-		/(['"])([^'"]*?tailwind-atomic-runtime[^'"]*|\0tailwind-atomic-runtime)\1/g,
+		/(['"])([^'"]*?(?:tailwindcss-atomic-runtime|tailwind-atomic-runtime)[^'"]*|\0(?:tailwindcss-atomic-runtime|tailwind-atomic-runtime))\1/g,
 		(match, quote: string, spec: string) => {
 			if (spec === VIRTUAL_RUNTIME_IMPORT) return match;
 			return `${quote}${VIRTUAL_RUNTIME_IMPORT}${quote}`;
@@ -139,7 +165,7 @@ function packageDeclaresTwMerge(root: string) {
 function projectHasTwMerge() {
 	const roots = [
 		...ATOMIC_RUNTIME.projectRoots,
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"],
+		readProjectRootEnv(),
 		process.cwd(),
 	].filter((dir): dir is string => Boolean(dir));
 
@@ -263,6 +289,7 @@ export { atomicReconcile, rewrite as atomicClassName };
 export {
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
+	LEGACY_VIRTUAL_RUNTIME_RESOLVED,
 	RUNTIME_FN,
 	generateRuntimeModule,
 	isAtomicRuntimeModule,

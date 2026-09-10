@@ -29,7 +29,7 @@ describe("tailwindcssAtomicAstro", () => {
 			| ReturnType<typeof vite>
 			| undefined;
 		expect(Array.isArray(plugins)).toBe(true);
-		expect(plugins?.[0]?.name).toBe("tailwind-atomic-css");
+		expect(plugins?.[0]?.name).toBe("tailwindcss-atomic-css");
 	});
 
 	it("forwards factory options to the Vite adapter", () => {
@@ -89,7 +89,7 @@ describe("factory astro transforms", () => {
 			".flex { display: flex }",
 			"src/pages/index.astro?astro&type=style&index=0&lang.css",
 		);
-		expect(result?.code).toContain("/*! tailwind-atomic */");
+		expect(result?.code).toContain("/*! tailwindcss-atomic */");
 		expect(result?.code).toMatch(/\._[0-9a-f]{6}/);
 	});
 
@@ -125,7 +125,7 @@ describe("transformViteCss astro styles", () => {
 			".flex { display: flex }",
 			"src/pages/index.astro?astro&type=style&index=0&lang.css",
 		);
-		expect(result?.code).toContain("/*! tailwind-atomic */");
+		expect(result?.code).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 	});
 });

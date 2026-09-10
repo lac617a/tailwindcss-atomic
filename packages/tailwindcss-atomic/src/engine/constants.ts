@@ -1,4 +1,8 @@
-const ATOMIC_MARKER = "/*! tailwind-atomic */";
+const ATOMIC_MARKER = "/*! tailwindcss-atomic */";
+const LEGACY_ATOMIC_MARKER = "/*! tailwind-atomic */";
+const ATOMIC_MAP_MARKER = "/*! tailwindcss-atomic-map";
+const PROJECT_ROOT_ENV = "TAILWINDCSS_ATOMIC_PROJECT_ROOT";
+const LEGACY_PROJECT_ROOT_ENV = "TAILWIND_ATOMIC_PROJECT_ROOT";
 const TAILWIND_DIRECTIVE_RE =
 	/@tailwind\b|@(?:import|use|reference)\s+["']tailwindcss(?:\/[^"']*)?["']/;
 
@@ -99,6 +103,21 @@ function getAtomicRuntime(): AtomicRuntime {
 
 const ATOMIC_RUNTIME = getAtomicRuntime();
 
+function readProjectRootEnv(): string | undefined {
+	return (
+		process.env[PROJECT_ROOT_ENV] || process.env[LEGACY_PROJECT_ROOT_ENV]
+	);
+}
+
+function ensureProjectRootEnv(value: string) {
+	process.env[PROJECT_ROOT_ENV] ||= value;
+}
+
+function clearProjectRootEnv() {
+	delete process.env[PROJECT_ROOT_ENV];
+	delete process.env[LEGACY_PROJECT_ROOT_ENV];
+}
+
 const CSS_ENTRY_CANDIDATES = [
 	"app/globals.css",
 	"src/app/globals.css",
@@ -124,12 +143,19 @@ const CSS_ENTRY_CANDIDATES = [
 
 export {
 	ATOMIC_MARKER,
+	LEGACY_ATOMIC_MARKER,
+	ATOMIC_MAP_MARKER,
+	PROJECT_ROOT_ENV,
+	LEGACY_PROJECT_ROOT_ENV,
 	TAILWIND_DIRECTIVE_RE,
 	NESTED_AT_RULES,
 	ATOMIC_RUNTIME,
 	CSS_ENTRY_CANDIDATES,
 	DEFAULT_TARGET_FUNCTIONS,
 	DEFAULT_PRESERVE_FUNCTIONS,
+	readProjectRootEnv,
+	ensureProjectRootEnv,
+	clearProjectRootEnv,
 };
 
 export type {IgnoreCssPattern, PreserveClassPattern};

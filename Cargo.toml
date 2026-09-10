@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/tailwind-atomic", "crates/tailwind-atomic-wasm"]
+members = ["crates/tailwindcss-atomic", "crates/tailwindcss-atomic-wasm"]
 
 [workspace.package]
 version = "0.1.1"

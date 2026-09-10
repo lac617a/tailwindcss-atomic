@@ -1,4 +1,4 @@
-import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "./constants";
+import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS, ensureProjectRootEnv} from "./constants";
 
 import type {
 	OutputBundle,
@@ -37,6 +37,7 @@ import {
 	rewriteEmittedRuntimeImports,
 	VIRTUAL_RUNTIME_IMPORT,
 	VIRTUAL_RUNTIME_RESOLVED,
+	LEGACY_VIRTUAL_RUNTIME_RESOLVED,
 } from "./virtual-runtime";
 
 export async function transformAtomicSource(code: string, id: string) {
@@ -305,12 +306,16 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 	}
 
 	return {
-		name: "tailwind-atomic-plugin",
+		name: "tailwindcss-atomic-plugin",
 		enforce: "post",
 
 		resolveId(id: string) {
 			const clean = String(id).split("?")[0] ?? id;
-			if (clean === VIRTUAL_RUNTIME_IMPORT || clean === VIRTUAL_RUNTIME_RESOLVED) {
+			if (
+				clean === VIRTUAL_RUNTIME_IMPORT ||
+				clean === VIRTUAL_RUNTIME_RESOLVED ||
+				clean === LEGACY_VIRTUAL_RUNTIME_RESOLVED
+			) {
 				return VIRTUAL_RUNTIME_RESOLVED;
 			}
 		},
@@ -425,7 +430,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 
 		webpack(compiler) {
 			if (typeof compiler.context === "string" && compiler.context) {
-				process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= compiler.context;
+				ensureProjectRootEnv(compiler.context);
 				ATOMIC_RUNTIME.projectRoots.push(compiler.context);
 			}
 
@@ -436,7 +441,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			}
 
 			compiler.hooks.watchRun?.tap(
-				"tailwind-atomic-plugin",
+				"tailwindcss-atomic-plugin",
 				(watchCompiler) => {
 					const next =
 						(watchCompiler as {watching?: {invalidate?: () => void}})
@@ -446,14 +451,14 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 				},
 			);
 
-			compiler.hooks.watchClose?.tap("tailwind-atomic-plugin", () => {
+			compiler.hooks.watchClose?.tap("tailwindcss-atomic-plugin", () => {
 				const current = (compiler as {watching?: {invalidate?: () => void}})
 					.watching;
 				if (current) ATOMIC_RUNTIME.webpackWatchings.delete(current);
 			});
 
 			compiler.hooks.beforeCompile.tapPromise(
-				"tailwind-atomic-plugin",
+				"tailwindcss-atomic-plugin",
 				async () => {
 					await warmupClassMapFromCss();
 				},
@@ -464,10 +469,10 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			const webpackLoaderPath = resolveWebpackLoaderPath();
 
 			compiler.hooks.compilation.tap(
-				"tailwind-atomic-plugin",
+				"tailwindcss-atomic-plugin",
 				(compilation) => {
 					NormalModule.getCompilationHooks(compilation).loader.tap(
-						"tailwind-atomic-plugin",
+						"tailwindcss-atomic-plugin",
 						(_loaderContext, module) => {
 							const resource = module.resource;
 							if (!resource || !isJsFile(resource)) return;
@@ -492,7 +497,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 
 					compilation.hooks.processAssets.tapPromise(
 						{
-							name: "tailwind-atomic-plugin",
+							name: "tailwindcss-atomic-plugin",
 							stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE,
 						},
 						async (assets) => {

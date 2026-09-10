@@ -1,6 +1,6 @@
 import postcss from "postcss";
 
-import {ATOMIC_MARKER, ATOMIC_RUNTIME} from "../src/engine/constants";
+import {ATOMIC_MARKER, ATOMIC_RUNTIME, LEGACY_ATOMIC_MARKER} from "../src/engine/constants";
 import {
 	applyAtomicCss,
 	atomicizeContainer,
@@ -269,13 +269,16 @@ describe("applyAtomicCss", () => {
 		expect(applyAtomicCss(`${ATOMIC_MARKER}\n._aaaaaa{display:flex}`).changed).toBe(
 			false,
 		);
+		expect(
+			applyAtomicCss(`${LEGACY_ATOMIC_MARKER}\n._aaaaaa{display:flex}`).changed,
+		).toBe(false);
 	});
 
 	it("atomicizes utility rules and stamps the marker", () => {
 		const {code, changed} = applyAtomicCss(".flex { display: flex }");
 		expect(changed).toBe(true);
 		expect(code.startsWith(ATOMIC_MARKER)).toBe(true);
-		expect(code).toContain("/*! tailwind-atomic-map ");
+		expect(code).toContain("/*! tailwindcss-atomic-map ");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(code).toContain(ATOMIC_RUNTIME.classMap["flex"]);
 		expect(code).not.toContain(".flex {");
@@ -377,7 +380,7 @@ describe("applyAtomicCss", () => {
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
 
 		expect(warn).toHaveBeenCalledTimes(1);
-		expect(String(warn.mock.calls[0]?.[0])).toContain("[tailwind-atomic]");
+		expect(String(warn.mock.calls[0]?.[0])).toContain("[tailwindcss-atomic]");
 		expect(String(warn.mock.calls[0]?.[0])).toContain("unreachable");
 		warn.mockRestore();
 	});
@@ -1007,7 +1010,7 @@ describe("CSS entry discovery", () => {
 	};
 
 	it("collects unique ancestors from env, runtime roots and cwd", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/app";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/app";
 		process.env["INIT_CWD"] = "/app";
 		ATOMIC_RUNTIME.projectRoots = ["/app", "/app"];
 		const cwd = vi.spyOn(process, "cwd").mockReturnValue("/app");
@@ -1020,7 +1023,7 @@ describe("CSS entry discovery", () => {
 	});
 
 	it("finds a candidate CSS file on a search root", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/app";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/app";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/app");
 
@@ -1038,7 +1041,7 @@ describe("CSS entry discovery", () => {
 	});
 
 	it("walks nested folders and skips build dirs", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/repo";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/repo";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/repo");
 
@@ -1069,7 +1072,7 @@ describe("CSS entry discovery", () => {
 	});
 
 	it("stops walking after six directory levels", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/repo";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/repo";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/repo");
 
@@ -1099,7 +1102,7 @@ describe("CSS entry discovery", () => {
 	});
 
 	it("prefers explicit cssEntries over candidate discovery", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/app";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/app";
 		ATOMIC_RUNTIME.projectRoots = [];
 		ATOMIC_RUNTIME.cssEntries = ["scss/styles.scss"];
 		vi.spyOn(process, "cwd").mockReturnValue("/app");
@@ -1120,7 +1123,7 @@ describe("CSS entry discovery", () => {
 	});
 
 	it("returns undefined when nothing matches", () => {
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] = "/empty";
+		process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"] = "/empty";
 		ATOMIC_RUNTIME.projectRoots = [];
 		vi.spyOn(process, "cwd").mockReturnValue("/empty");
 

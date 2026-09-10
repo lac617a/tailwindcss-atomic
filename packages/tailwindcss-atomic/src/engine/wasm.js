@@ -6,15 +6,21 @@ import {fileURLToPath} from "node:url";
 const req = createRequire(import.meta.url);
 
 function resolveWasmJs() {
+	const names = [
+		"tailwindcss_atomic_wasm.js",
+		"tailwind_atomic_wasm.js",
+	];
 	let dir = dirname(fileURLToPath(import.meta.url));
 	for (let i = 0; i < 6; i++) {
-		const candidate = join(dir, "pkg", "tailwind_atomic_wasm.js");
-		if (existsSync(candidate)) return candidate;
+		for (const name of names) {
+			const candidate = join(dir, "pkg", name);
+			if (existsSync(candidate)) return candidate;
+		}
 		const parent = dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
 	}
-	return req.resolve("../pkg/tailwind_atomic_wasm.js");
+	return req.resolve("../pkg/tailwindcss_atomic_wasm.js");
 }
 
 const wasm = req(resolveWasmJs());

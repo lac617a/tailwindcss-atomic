@@ -68,7 +68,7 @@ Copy-paste setups live in [Integrations](./integrations).
 ## 3. Confirm it worked
 
 1. Inspect the DOM: `className` should show hashes like `_aa7b5f`, not `flex` or `p-6`.
-2. Compiled CSS includes the comment `/*! tailwind-atomic */` and rules such as `._aa7b5f { … }`.
+2. Compiled CSS includes the comment `/*! tailwindcss-atomic */` and rules such as `._aa7b5f { … }`.
 3. Strings inside `cn()`, `clsx()`, and `cva()` are rewritten too.
 
 The map `flex` → `_xxxxxx` is stored at `node_modules/.cache/tailwindcss-atomic/class-map.json` so JS/HTML rewrite does not depend on PostCSS having already run.

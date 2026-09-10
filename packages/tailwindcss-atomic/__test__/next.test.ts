@@ -62,7 +62,7 @@ describe("withTailwindcssAtomic", () => {
 		const appFile = "[project]/s../src/engine/worker/timer-stats.worker.ts";
 		expect(/\[turbopack/.test(virtual)).toBe(true);
 		expect(/\[turbopack/.test(appFile)).toBe(false);
-		expect(/^\0/.test("\0tailwind-atomic-runtime")).toBe(true);
+		expect(/^\0/.test("\0tailwindcss-atomic-runtime")).toBe(true);
 		expect(/(?:^|[\\/])_virtual_/.test("/tmp/app/_virtual_%00x")).toBe(true);
 
 		readInstalledNextVersion.mockReturnValue("16.3.0");
@@ -139,7 +139,7 @@ describe("withTailwindcssAtomic", () => {
 		if (process.platform === "win32") {
 			expect(result?.cache).toEqual({type: "memory"});
 		}
-		expect(process.env["TAILWIND_ATOMIC_PROJECT_ROOT"]).toBe(process.cwd());
+		expect(process.env["TAILWINDCSS_ATOMIC_PROJECT_ROOT"]).toBe(process.cwd());
 	});
 
 	it("accepts Next.js NextConfig when webpack is null", () => {

@@ -18,7 +18,7 @@ fn js_class_map(value: JsValue) -> std::collections::HashMap<String, String> {
 
 #[wasm_bindgen]
 pub fn process_tailwind_css(raw_css: &str) -> Result<JsValue, JsValue> {
-    let output = tailwind_atomic::atomicize_stylesheet(raw_css)
+    let output = tailwindcss_atomic::atomicize_stylesheet(raw_css)
         .map_err(|error| JsValue::from_str(&error))?;
 
     let result = AtomicResult {
@@ -33,15 +33,15 @@ pub fn process_tailwind_css(raw_css: &str) -> Result<JsValue, JsValue> {
 
 #[wasm_bindgen]
 pub fn rewrite_class_string(class_str: &str, class_map: JsValue) -> String {
-    tailwind_atomic::rewrite_class_string(class_str, &js_class_map(class_map))
+    tailwindcss_atomic::rewrite_class_string(class_str, &js_class_map(class_map))
 }
 
 #[wasm_bindgen]
 pub fn rewrite_html_classes(html: &str, class_map: JsValue) -> String {
-    tailwind_atomic::rewrite_html_classes(html, &js_class_map(class_map))
+    tailwindcss_atomic::rewrite_html_classes(html, &js_class_map(class_map))
 }
 
 #[wasm_bindgen]
 pub fn looks_like_tailwind_utility(class_name: &str) -> bool {
-    tailwind_atomic::looks_like_tailwind_utility(class_name)
+    tailwindcss_atomic::looks_like_tailwind_utility(class_name)
 }

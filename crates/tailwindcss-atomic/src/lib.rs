@@ -4,7 +4,7 @@
 //! declaration, and rewrites class strings / HTML to the hashed names.
 //!
 //! ```
-//! use tailwind_atomic::{atomicize_stylesheet, rewrite_class_string};
+//! use tailwindcss_atomic::{atomicize_stylesheet, rewrite_class_string};
 //!
 //! let out = atomicize_stylesheet(".flex { display: flex }").unwrap();
 //! assert!(out.changed);

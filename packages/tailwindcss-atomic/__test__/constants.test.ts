@@ -10,7 +10,7 @@ import {
 
 describe("constants", () => {
 	it("exposes the atomic marker used to skip already processed CSS", () => {
-		expect(ATOMIC_MARKER).toBe("/*! tailwind-atomic */");
+		expect(ATOMIC_MARKER).toBe("/*! tailwindcss-atomic */");
 	});
 
 	it("detects Tailwind v3 directives and v4 imports", () => {

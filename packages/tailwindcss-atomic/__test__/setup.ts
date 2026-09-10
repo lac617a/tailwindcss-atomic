@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 
-import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS} from "../src/engine/constants";
+import {ATOMIC_RUNTIME, DEFAULT_TARGET_FUNCTIONS, clearProjectRootEnv} from "../src/engine/constants";
 import {
 	defaultProcessTailwindCss,
 	processTailwindCss,
@@ -18,7 +18,7 @@ const loaderStubPath = path.join(packagesRoot, "loader.cjs");
 const wasmArtifact = path.join(
 	packagesRoot,
 	"pkg",
-	"tailwind_atomic_wasm.js",
+	"tailwindcss_atomic_wasm.js",
 );
 
 if (!fs.existsSync(wasmArtifact)) {
@@ -57,7 +57,7 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.preserveFunctions = new Set(["twIgnore"]);
 	ATOMIC_RUNTIME.classMapFile = false;
 	ATOMIC_RUNTIME.cssEntries = [];
-	delete process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
+	clearProjectRootEnv();
 	clearLinkedPackageCache();
 	if (!fs.existsSync(loaderStubPath)) {
 		fs.writeFileSync(

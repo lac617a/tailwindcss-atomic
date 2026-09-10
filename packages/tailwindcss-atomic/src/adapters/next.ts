@@ -5,7 +5,7 @@ import {fileURLToPath} from "node:url";
 import type {Configuration} from "webpack";
 
 import webpackTailwindcssAtomic from "./webpack";
-import {ATOMIC_RUNTIME} from "../engine/constants";
+import {ATOMIC_RUNTIME, ensureProjectRootEnv} from "../engine/constants";
 import {shouldSkipJsTransform} from "../engine/js";
 import {
 	readInstalledNextVersion,
@@ -179,7 +179,7 @@ export function withTailwindcssAtomic<T extends object = NextConfigFields>(
 
 	if (options.library) {
 		console.warn(
-			"[tailwind-atomic] `library: true` is for Rollup UI packages (preserveModules), not next.config. Ignoring so the app still hashes classNames.",
+			"[tailwindcss-atomic] `library: true` is for Rollup UI packages (preserveModules), not next.config. Ignoring so the app still hashes classNames.",
 		);
 	}
 
@@ -207,7 +207,7 @@ export function withTailwindcssAtomic<T extends object = NextConfigFields>(
 			},
 		},
 		webpack(webpackConfig: Configuration, webpackOptions: NextWebpackOptions) {
-			process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||= process.cwd();
+			ensureProjectRootEnv(process.cwd());
 			ATOMIC_RUNTIME.projectRoots.unshift(process.cwd());
 			ATOMIC_RUNTIME.projectRoots.push(monorepoRoot);
 

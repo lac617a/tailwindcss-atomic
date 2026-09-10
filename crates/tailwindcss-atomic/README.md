@@ -1,4 +1,4 @@
-# tailwind-atomic
+# tailwindcss-atomic
 
 Rust compiler that turns compiled Tailwind CSS into atomic hashed classes.
 
@@ -8,11 +8,11 @@ This crate is the engine behind [`tailwindcss-atomic`](https://www.npmjs.com/pac
 
 ```toml
 [dependencies]
-tailwind-atomic = "0.1"
+tailwindcss-atomic = "0.1"
 ```
 
 ```rust
-use tailwind_atomic::{atomicize_stylesheet, rewrite_class_string, rewrite_html_classes};
+use tailwindcss_atomic::{atomicize_stylesheet, rewrite_class_string, rewrite_html_classes};
 
 let out = atomicize_stylesheet(".flex { display: flex } .p-4 { padding: 1rem }")?;
 
@@ -32,7 +32,7 @@ Custom classes that are not Tailwind-shaped (`.header-signin`, `.btn-notch`) and
 
 ## WASM / bundlers
 
-The npm package `tailwindcss-atomic` ships WebAssembly bindings from the `tailwind-atomic-wasm` crate in this repo. You do not need this crate unless you are embedding the compiler in Rust.
+The npm package `tailwindcss-atomic` ships WebAssembly bindings from the `tailwindcss-atomic-wasm` crate in this repo. You do not need this crate unless you are embedding the compiler in Rust.
 
 ## License
 

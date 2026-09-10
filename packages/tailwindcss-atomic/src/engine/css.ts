@@ -13,17 +13,20 @@ import type {
 
 import {
 	ATOMIC_MARKER,
+	ATOMIC_MAP_MARKER,
 	ATOMIC_RUNTIME,
+	LEGACY_ATOMIC_MARKER,
 	NESTED_AT_RULES,
 	CSS_ENTRY_CANDIDATES,
 	TAILWIND_DIRECTIVE_RE,
+	readProjectRootEnv,
 } from "./constants";
 
 import {findMonorepoRoot} from "./workspace";
 import {process_tailwind_css, looks_like_tailwind_utility} from "./wasm";
 
 const ATOMIC_MAP_COMMENT_RE =
-	/\/\*! tailwind-atomic-map\s+([A-Za-z0-9+/]+=*)\s*\*\//;
+	/\/\*! tailwind(?:css)?-atomic-map\s+([A-Za-z0-9+/]+=*)\s*\*\//;
 
 const TAILWIND_SASS_LAYER_RE =
 	/@(?:use|import|reference)\s+(['"])tailwindcss\/(base|components|utilities|preflight)\1(?:\s+as\s+(?:\*|[\w-]+))?\s*;?/gi;
@@ -190,7 +193,7 @@ async function compileTailwindV4Css(
 }
 
 function isAlreadyAtomic(css: string) {
-	return css.includes(ATOMIC_MARKER);
+	return css.includes(ATOMIC_MARKER) || css.includes(LEGACY_ATOMIC_MARKER);
 }
 
 function isSassFile(cssPath: string) {
@@ -297,7 +300,7 @@ function formatAtomicCss(rootCss: string) {
 	if (!Object.keys(plain).length) {
 		return `${ATOMIC_MARKER}\n${rootCss}`;
 	}
-	return `${ATOMIC_MARKER}\n/*! tailwind-atomic-map ${encodeClassMap(plain)} */\n${rootCss}`;
+	return `${ATOMIC_MARKER}\n${ATOMIC_MAP_MARKER} ${encodeClassMap(plain)} */\n${rootCss}`;
 }
 
 function rehydrateClassMapFromCss(css: string) {
@@ -1012,7 +1015,7 @@ function classMapFilePath() {
 	}
 	const root =
 		ATOMIC_RUNTIME.projectRoots[0] ||
-		process.env["TAILWIND_ATOMIC_PROJECT_ROOT"] ||
+		readProjectRootEnv() ||
 		process.cwd();
 	if (!root) return undefined;
 	return path.join(root, "node_modules", ".cache", "tailwindcss-atomic", "class-map.json");
@@ -1083,7 +1086,7 @@ function warnWasmFailure(error: unknown) {
 	wasmFailureWarned = true;
 	const message = error instanceof Error ? error.message : String(error);
 	console.warn(
-		`[tailwind-atomic] wasm atomicize failed, falling back to PostCSS: ${message}`,
+		`[tailwindcss-atomic] wasm atomicize failed, falling back to PostCSS: ${message}`,
 	);
 }
 
@@ -1201,7 +1204,7 @@ function collectSearchRoots(
 	dirname: (path: string) => string,
 	parse: (path: string) => {root: string},
 ) {
-	const projectRoot = process.env["TAILWIND_ATOMIC_PROJECT_ROOT"];
+	const projectRoot = readProjectRootEnv();
 	const starts = [
 		projectRoot,
 		...ATOMIC_RUNTIME.projectRoots,
@@ -1486,7 +1489,7 @@ async function warmupClassMapFromCss() {
 
 	warmupPromise = runWarmup()
 		.catch((error) => {
-			console.warn("[tailwind-atomic] warmup failed:", error);
+			console.warn("[tailwindcss-atomic] warmup failed:", error);
 		})
 		.finally(() => {
 			if (Object.keys(ATOMIC_RUNTIME.classMap).length === 0) {

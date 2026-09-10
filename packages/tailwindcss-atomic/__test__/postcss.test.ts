@@ -27,7 +27,7 @@ const NEXI_MODULE_CSS = `
 describe("postcss plugin", () => {
 	it("declares itself as a PostCSS plugin", () => {
 		expect(postcssTailwindcssAtomic.postcss).toBe(true);
-		expect(postcssTailwindcssAtomic().postcssPlugin).toBe("postcss-tailwind-atomic");
+		expect(postcssTailwindcssAtomic().postcssPlugin).toBe("postcss-tailwindcss-atomic");
 	});
 
 	it("replaces utility CSS with atomic rules", async () => {
@@ -35,7 +35,7 @@ describe("postcss plugin", () => {
 			".flex { display: flex }",
 			{from: undefined},
 		);
-		expect(result.css).toContain("/*! tailwind-atomic */");
+		expect(result.css).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(result.css).not.toContain(".flex {");
 	});
@@ -58,7 +58,7 @@ describe("postcss plugin", () => {
 			from: undefined,
 		});
 		expect(result.css).toContain(":root");
-		expect(result.css).not.toContain("/*! tailwind-atomic */");
+		expect(result.css).not.toContain("/*! tailwindcss-atomic */");
 	});
 
 	it("invalidates JS modules when the class map changes", async () => {
@@ -84,7 +84,7 @@ describe("postcss plugin", () => {
 		expect(posix.css).toContain(".slick-track");
 		expect(posix.css).toContain(".slick-slide");
 		expect(posix.css).toContain(".slick-list");
-		expect(posix.css).not.toContain("/*! tailwind-atomic */");
+		expect(posix.css).not.toContain("/*! tailwindcss-atomic */");
 		expect(posix.css).not.toMatch(/\._[0-9a-f]{6}/);
 		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
 
@@ -92,13 +92,13 @@ describe("postcss plugin", () => {
 			from: "D:\\repo\\node_modules\\slick-carousel\\slick\\slick-theme.css",
 		});
 		expect(win.css).toContain(".slick-slider");
-		expect(win.css).not.toContain("/*! tailwind-atomic */");
+		expect(win.css).not.toContain("/*! tailwindcss-atomic */");
 
 		const app = await postcss([postcssTailwindcssAtomic()]).process(
 			".flex { display: flex } .p-4 { padding: 1rem }",
 			{from: "src/app/globals.css"},
 		);
-		expect(app.css).toContain("/*! tailwind-atomic */");
+		expect(app.css).toContain("/*! tailwindcss-atomic */");
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(app.css).not.toContain(".flex {");
@@ -116,7 +116,7 @@ describe("postcss plugin", () => {
 		}
 		expect(ATOMIC_RUNTIME.classMap["flex"]).toMatch(/^_[0-9a-f]{6}$/);
 		expect(ATOMIC_RUNTIME.classMap["p-4"]).toMatch(/^_[0-9a-f]{6}$/);
-		expect(result.css).toContain("/*! tailwind-atomic */");
+		expect(result.css).toContain("/*! tailwindcss-atomic */");
 		expect(result.css).not.toContain(".flex {");
 		expect(result.css).not.toContain(".p-4 {");
 
@@ -126,6 +126,6 @@ describe("postcss plugin", () => {
 		);
 		expect(localsOnly.css).toContain(".tongue ");
 		expect(localsOnly.css).toContain(".svg ");
-		expect(localsOnly.css).not.toContain("/*! tailwind-atomic */");
+		expect(localsOnly.css).not.toContain("/*! tailwindcss-atomic */");
 	});
 });

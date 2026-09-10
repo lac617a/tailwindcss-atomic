@@ -26,7 +26,7 @@ export default function postcssTailwindcssAtomic(options: PostcssAtomicOptions =
 	}
 
 	return {
-		postcssPlugin: "postcss-tailwind-atomic",
+		postcssPlugin: "postcss-tailwindcss-atomic",
 		Once(root: PostcssRoot) {
 			const from = root.source?.input?.from;
 			if (shouldIgnoreCss(from)) return;

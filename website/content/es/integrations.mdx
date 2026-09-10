@@ -30,6 +30,19 @@ export default withTailwindcssAtomic(nextConfig);
 
 Mantén PostCSS con `@tailwindcss/postcss` **y después** `tailwindcss-atomic/postcss`.
 
+<Callout>
+  Los wrappers que devuelven una **función** de config de Next (`withPostHogConfig`, Sentry, algunos setups de `next-intl`) hay que invocarlos, no hacerles spread. `withTailwindcssAtomic` ahora resuelve esas funciones para no perder tu `webpack()` (fallbacks de `dns`/`net`/`tls`). PostHog sigue queriendo ser el wrapper **más externo**:
+
+  ```ts
+  export default withPostHogConfig(
+    withTailwindcssAtomic(withNextIntl(nextConfig), {report: true}),
+    { /* posthog */ },
+  );
+  ```
+</Callout>
+
+## Next.js 15 + Tailwind 3 + SCSS
+
 ## Next.js 15 + Tailwind 3 + SCSS
 
 Tailwind v3 no expande `@use 'tailwindcss/utilities'`; espera `@tailwind utilities`. Si la entrada es SCSS (por ejemplo `scss/styles.scss` importada desde `app/layout.tsx`) el warmup **normaliza** esas capas y, si está instalado `sass`, compila los `@use` locales antes de PostCSS. Así el mapa `flex` → `_xxxxxx` existe **antes** de que Webpack transforme los bundles de App Router (client, SSR y RSC).

@@ -103,12 +103,18 @@ type NextConfigFields = {
 	webpack?: ((...args: never[]) => unknown) | null;
 	transpilePackages?: string[];
 	outputFileTracingRoot?: string;
+	serverExternalPackages?: string[];
 	turbopack?: {
 		root?: string;
 		rules?: Record<string, unknown>;
 		resolveAlias?: Record<string, string | string[]>;
 	} | null;
 };
+
+/** Next.js `export default (phase, ctx) => config` (also used by `withPostHogConfig`). */
+type NextConfigFunction = (
+	...args: never[]
+) => NextConfigFields | Promise<NextConfigFields | null | undefined>;
 
 type AtomicNextConfig<T> = Omit<
 	T,
@@ -135,6 +141,7 @@ export type {
 	UnpluginFactoryFunction,
 	UnpluginFactoryOptions,
 	AtomicNextConfig,
+	NextConfigFunction,
 	NextWebpackOptions,
 	TurbopackLoaderBuiltinCondition,
 	TurbopackPathCondition,

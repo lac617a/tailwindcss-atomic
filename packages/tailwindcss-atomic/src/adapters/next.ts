@@ -22,6 +22,7 @@ import {
 	AtomicNextConfig,
 	LegacyTurboRuleShorthand,
 	NextConfigFields,
+	NextConfigFunction,
 	NextWebpackOptions,
 	TurboRuleConfigCollection,
 	TurboRuleConfigItem,
@@ -157,8 +158,8 @@ function callUserWebpack(
 	return (webpackHook as NextWebpackHook)(config, webpackOptions) ?? config;
 }
 
-export function withTailwindcssAtomic<T extends object = NextConfigFields>(
-	nextConfig: T = {} as T,
+function applyAtomicNextConfig<T extends object>(
+	nextConfig: T,
 	options: AtomicNextOptions = {},
 ): AtomicNextConfig<T> {
 	const config = nextConfig as T & NextConfigFields;
@@ -236,4 +237,38 @@ export function withTailwindcssAtomic<T extends object = NextConfigFields>(
 			return callUserWebpack(userWebpack, webpackConfig, webpackOptions);
 		},
 	} as AtomicNextConfig<T>;
+}
+
+function asConfigObject(value: unknown): NextConfigFields {
+	if (value && typeof value === "object" && !Array.isArray(value)) {
+		return value as NextConfigFields;
+	}
+	return {};
+}
+
+export function withTailwindcssAtomic(
+	nextConfig: NextConfigFunction,
+	options?: AtomicNextOptions,
+): (
+	...args: never[]
+) => Promise<AtomicNextConfig<NextConfigFields>>;
+export function withTailwindcssAtomic<T extends object = NextConfigFields>(
+	nextConfig?: T,
+	options?: AtomicNextOptions,
+): AtomicNextConfig<T>;
+export function withTailwindcssAtomic<T extends object = NextConfigFields>(
+	nextConfig: T | NextConfigFunction = {} as T,
+	options: AtomicNextOptions = {},
+):
+	| AtomicNextConfig<T>
+	| ((...args: never[]) => Promise<AtomicNextConfig<NextConfigFields>>) {
+	if (typeof nextConfig === "function") {
+		const configFn = nextConfig as NextConfigFunction;
+		return async (...args: never[]) => {
+			const resolved = await configFn(...args);
+			return applyAtomicNextConfig(asConfigObject(resolved), options);
+		};
+	}
+
+	return applyAtomicNextConfig(nextConfig as T, options);
 }

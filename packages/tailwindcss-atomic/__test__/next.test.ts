@@ -244,6 +244,51 @@ describe("withTailwindcssAtomic", () => {
 		warn.mockRestore();
 	});
 
+	it("resolves async Next config functions so inner webpack hooks stay intact", async () => {
+		const webpack = vi.fn((cfg: Configuration) => {
+			cfg.resolve = {
+				...cfg.resolve,
+				fallback: {
+					...(cfg.resolve?.fallback ?? {}),
+					dns: false,
+					net: false,
+					tls: false,
+				},
+			};
+			return cfg;
+		});
+		const inner = async () => ({
+			serverExternalPackages: ["ioredis"],
+			webpack,
+		});
+		const wrapped = withTailwindcssAtomic(inner);
+		expect(typeof wrapped).toBe("function");
+		const config = await wrapped();
+		expect(config.serverExternalPackages).toEqual(["ioredis"]);
+
+		const webpackConfig: Configuration = {
+			plugins: [],
+			module: {rules: []},
+			resolve: {},
+		};
+		const result = config.webpack(webpackConfig, {dev: false, isServer: false});
+		expect(webpack).toHaveBeenCalled();
+		expect(result?.resolve?.fallback).toMatchObject({
+			dns: false,
+			net: false,
+			tls: false,
+		});
+		expect(result?.plugins?.length).toBeGreaterThan(0);
+	});
+
+	it("resolves sync Next config functions", async () => {
+		const inner = () => ({reactStrictMode: true});
+		const wrapped = withTailwindcssAtomic(inner);
+		const config = await wrapped();
+		expect(config.reactStrictMode).toBe(true);
+		expect(typeof config.webpack).toBe("function");
+	});
+
 	it("falls back to dist/loader.cjs when the source shim is missing", async () => {
 		const fs = await import("node:fs");
 		const path = await import("node:path");

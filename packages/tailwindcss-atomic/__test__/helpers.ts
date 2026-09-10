@@ -3,6 +3,16 @@ export type TailwindCssResult = {
 	css_rules: unknown;
 	css?: string;
 	changed?: boolean;
+	stats?: {
+		input_bytes: number;
+		output_bytes: number;
+		utilities: number;
+		atomic_rules: number;
+		declarations: number;
+		shared_hashes: number;
+		elapsed_us: number;
+		changed: boolean;
+	};
 };
 
 export function defaultProcessTailwindCss(css: string): TailwindCssResult {

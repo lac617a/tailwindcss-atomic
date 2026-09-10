@@ -17,9 +17,11 @@
 pub mod atomic;
 pub mod classes;
 pub mod html;
+pub mod stats;
 pub mod tailwind;
 
 pub use atomic::{atomicize_stylesheet, is_utility_selector, AtomicOutput};
+pub use stats::{class_string_stats, compute_atomic_stats, AtomicStats, ClassStringStats};
 pub use classes::{
     lookup_mapped_class, normalize_utility_class_name, rewrite_class_string, split_class_tokens,
     unescape_css_class_name,

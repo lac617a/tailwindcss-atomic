@@ -26,22 +26,25 @@ function processTemplateLiteral(
 ) {
 	let changed = false;
 	templateLiteral.quasis.forEach((element) => {
-		if (element.value && element.value.raw) {
-			const nextRaw = transformClassString(element.value.raw, classMap);
-			if (nextRaw !== element.value.raw) {
-				element.value.raw = nextRaw;
+		if (!element.value?.raw) return;
+
+		if (element.value.cooked != null) {
+			const nextCooked = transformClassString(
+				element.value.cooked,
+				classMap,
+			);
+			if (nextCooked !== element.value.cooked) {
+				element.value.cooked = nextCooked;
 				changed = true;
 			}
-			if (element.value.cooked != null) {
-				const nextCooked = transformClassString(
-					element.value.cooked,
-					classMap,
-				);
-				if (nextCooked !== element.value.cooked) {
-					element.value.cooked = nextCooked;
-					changed = true;
-				}
-			}
+		}
+
+		const nextRaw = transformClassString(element.value.raw, classMap, {
+			record: element.value.cooked == null,
+		});
+		if (nextRaw !== element.value.raw) {
+			element.value.raw = nextRaw;
+			changed = true;
 		}
 	});
 

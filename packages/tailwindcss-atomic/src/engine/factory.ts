@@ -7,7 +7,13 @@ import type {
 	UnpluginFactoryOptions,
 	WebpackCssModule,
 } from "../types";
-import {process_tailwind_css} from "./wasm";
+import {
+	configureAtomicReport,
+	flushAtomicReport,
+	markBundlerReport,
+	resetAtomicReport,
+	scheduleBundlerFlush,
+} from "./report";
 import {resolveWebpackLoaderPath} from "./utils";
 import {
 	isCssFile,
@@ -39,6 +45,7 @@ import {
 	VIRTUAL_RUNTIME_RESOLVED,
 	LEGACY_VIRTUAL_RUNTIME_RESOLVED,
 } from "./virtual-runtime";
+import {process_tailwind_css} from "./wasm";
 
 export async function transformAtomicSource(code: string, id: string) {
 	if (!id) return {code: null, map: null};
@@ -285,6 +292,9 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 	const libraryMode = options.library === true;
 	const disableLibraryMode = options.library === false;
 
+	configureAtomicReport(options.report);
+	markBundlerReport();
+
 	function isLibraryOutput(output?: RollupOutputOptions) {
 		if (disableLibraryMode) return false;
 		if (libraryMode) return true;
@@ -331,7 +341,16 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 		},
 
 		async buildStart() {
+			if (this.meta?.framework !== "webpack") {
+				resetAtomicReport({keepConfig: true});
+			}
 			await warmupClassMapFromCss();
+		},
+
+		buildEnd() {
+			if (this.meta?.framework === "esbuild") {
+				flushAtomicReport();
+			}
 		},
 
 		transformInclude(id) {
@@ -403,6 +422,10 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			return null;
 		},
 
+		closeBundle() {
+			flushAtomicReport();
+		},
+
 		vite: {
 			configResolved(config) {
 				if (config.root) {
@@ -443,6 +466,7 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 			compiler.hooks.watchRun?.tap(
 				"tailwindcss-atomic-plugin",
 				(watchCompiler) => {
+					resetAtomicReport({keepConfig: true});
 					const next =
 						(watchCompiler as {watching?: {invalidate?: () => void}})
 							.watching ??
@@ -455,6 +479,10 @@ const factory: UnpluginFactoryFunction = (opts?: UnpluginFactoryOptions) => {
 				const current = (compiler as {watching?: {invalidate?: () => void}})
 					.watching;
 				if (current) ATOMIC_RUNTIME.webpackWatchings.delete(current);
+			});
+
+			compiler.hooks.done?.tap("tailwindcss-atomic-plugin", () => {
+				scheduleBundlerFlush();
 			});
 
 			compiler.hooks.beforeCompile.tapPromise(

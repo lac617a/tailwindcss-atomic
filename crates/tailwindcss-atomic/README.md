@@ -8,7 +8,7 @@ This crate is the engine behind [`tailwindcss-atomic`](https://www.npmjs.com/pac
 
 ```toml
 [dependencies]
-tailwindcss-atomic = "2.0"
+tailwindcss-atomic = "2.1"
 ```
 
 ```rust
@@ -27,6 +27,14 @@ let html = rewrite_html_classes(r#"<div class="flex p-4">"#, &out.class_map);
 - `css` — full stylesheet with utilities replaced (keeps `@theme`, `:root`, `@media`, `@supports`, custom components)
 - `css_rules` — only the hashed atomic rules
 - `changed` — whether anything was rewritten
+- `stats` — before/after bytes, unique utilities vs shared atomic hashes, elapsed microseconds
+
+```rust
+assert!(out.stats.output_bytes > 0);
+assert!(out.stats.atomic_rules <= out.stats.declarations);
+```
+
+`class_string_stats("flex p-4", &out.class_map)` measures how much a class attribute grows or shrinks after hashing.
 
 Custom classes that are not Tailwind-shaped (`.header-signin`, `.btn-notch`) and component `::before` / `::after` rules are left intact. `looks_like_tailwind_utility` is the classifier the JS plugin uses so it does not keep a second copy of Tailwind prefixes.
 

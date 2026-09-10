@@ -9,6 +9,7 @@ import {
 	wasmMock,
 } from "./helpers";
 import {clearLinkedPackageCache} from "../src/engine/js";
+import {resetAtomicReport} from "../src/engine/report";
 
 const packagesRoot = path.resolve(
 	fileURLToPath(new URL(".", import.meta.url)),
@@ -59,6 +60,9 @@ beforeEach(() => {
 	ATOMIC_RUNTIME.cssEntries = [];
 	clearProjectRootEnv();
 	clearLinkedPackageCache();
+	resetAtomicReport();
+	delete process.env.TAILWINDCSS_ATOMIC_REPORT;
+	delete process.env.TAILWINDCSS_ATOMIC_BUNDLER;
 	if (!fs.existsSync(loaderStubPath)) {
 		fs.writeFileSync(
 			loaderStubPath,

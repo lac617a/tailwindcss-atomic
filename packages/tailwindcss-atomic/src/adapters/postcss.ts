@@ -5,10 +5,16 @@ import {ATOMIC_RUNTIME} from "../engine/constants";
 import type {IgnoreCssPattern, PreserveClassPattern} from "../engine/constants";
 import {applyAtomicCss, shouldIgnoreCss} from "../engine/css";
 import {invalidateJsModules} from "../engine/js";
+import {
+	configureAtomicReport,
+	scheduleReportFlush,
+	type ReportOption,
+} from "../engine/report";
 
 type PostcssAtomicOptions = {
 	ignoreCss?: IgnoreCssPattern[];
 	preserveClasses?: PreserveClassPattern[];
+	report?: ReportOption;
 };
 
 /**
@@ -24,6 +30,7 @@ export default function postcssTailwindcssAtomic(options: PostcssAtomicOptions =
 	if (options.preserveClasses?.length) {
 		ATOMIC_RUNTIME.preserveClasses.push(...options.preserveClasses);
 	}
+	configureAtomicReport(options.report);
 
 	return {
 		postcssPlugin: "postcss-tailwindcss-atomic",
@@ -43,6 +50,7 @@ export default function postcssTailwindcssAtomic(options: PostcssAtomicOptions =
 
 			root.removeAll();
 			root.append(parsed.nodes);
+			scheduleReportFlush();
 		},
 	};
 }

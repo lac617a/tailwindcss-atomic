@@ -43,6 +43,13 @@ interface UnpluginFactoryOptions {
 	 * adapter ignores it. Default: auto-on when Rollup `preserveModules` is set.
 	 */
 	library?: boolean;
+	/**
+	 * Print a before/after report when the build finishes (CSS bytes, gzip,
+	 * unique utilities vs atomic hashes, class-string size).
+	 * `true` pretty-prints; `"json"` emits one JSON line.
+	 * Also enabled with `TAILWINDCSS_ATOMIC_REPORT=1` or `=json`.
+	 */
+	report?: boolean | "json";
 }
 
 type UnpluginFactoryFunction = Partial<UnpluginFactory<UnpluginFactoryOptions>>;

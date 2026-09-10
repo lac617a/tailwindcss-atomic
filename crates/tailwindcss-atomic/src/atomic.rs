@@ -6,6 +6,7 @@ use lightningcss::stylesheet::{ParserFlags, ParserOptions, PrinterOptions, Style
 use lightningcss::traits::ToCss;
 
 use crate::classes::normalize_utility_class_name;
+use crate::stats::{compute_atomic_stats, AtomicStats};
 use crate::tailwind::looks_like_tailwind_utility;
 
 const TAILWIND_PSEUDO_ELEMENTS: &[&str] = &[
@@ -603,9 +604,22 @@ pub struct AtomicOutput {
     pub css: String,
     pub css_rules: Vec<String>,
     pub changed: bool,
+    pub stats: AtomicStats,
+}
+
+fn elapsed_micros(started: Option<std::time::Instant>) -> u64 {
+    started
+        .map(|start| start.elapsed().as_micros().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or(0)
 }
 
 pub fn atomicize_stylesheet(raw_css: &str) -> Result<AtomicOutput, String> {
+    // Instant panics on some wasm32 targets; the JS plugin times WASM calls itself.
+    let started = if cfg!(target_arch = "wasm32") {
+        None
+    } else {
+        Some(std::time::Instant::now())
+    };
     let stylesheet = StyleSheet::parse(raw_css, parser_options())
         .map_err(|error| format!("Error parseando CSS: {error:?}"))?;
 
@@ -643,11 +657,15 @@ pub fn atomicize_stylesheet(raw_css: &str) -> Result<AtomicOutput, String> {
         })
         .collect();
 
+    let elapsed_us = elapsed_micros(started);
+    let stats = compute_atomic_stats(raw_css, &class_map, &css, changed, elapsed_us);
+
     Ok(AtomicOutput {
         class_map,
         css,
         css_rules,
         changed,
+        stats,
     })
 }
 

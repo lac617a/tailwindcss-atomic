@@ -24,6 +24,12 @@ import {
 
 import {findMonorepoRoot} from "./workspace";
 import {process_tailwind_css, looks_like_tailwind_utility} from "./wasm";
+import {
+	recordClassStringTransform,
+	recordCssTransform,
+	statsElapsedUs,
+	type WasmAtomicStats,
+} from "./report";
 
 const ATOMIC_MAP_COMMENT_RE =
 	/\/\*! tailwind(?:css)?-atomic-map\s+([A-Za-z0-9+/]+=*)\s*\*\//;
@@ -905,9 +911,14 @@ function splitClassTokens(value: string) {
 	return tokens;
 }
 
+type TransformClassStringOptions = {
+	record?: boolean;
+};
+
 function transformClassString(
 	classStr: string,
 	classMap: Record<string, string>,
+	options?: TransformClassStringOptions,
 ) {
 	if (!classStr) return classStr;
 	const leading = classStr.match(/^\s*/)?.[0] ?? "";
@@ -918,7 +929,11 @@ function transformClassString(
 	const rewritten = splitClassTokens(originals)
 		.map((cls) => lookupMappedClass(cls, classMap) || cls)
 		.join(" ");
-	return `${leading}${rewritten}${trailing}`;
+	const next = `${leading}${rewritten}${trailing}`;
+	if (options?.record !== false && next !== classStr) {
+		recordClassStringTransform(classStr, next);
+	}
+	return next;
 }
 
 function reverseClassMap(classMap: Record<string, string>) {
@@ -1135,12 +1150,15 @@ function applyAtomicCss(css: string, from?: string) {
 
 		if (!protectUnhashedLocals) {
 			try {
+				const started = performance.now();
 				const wasmResult = process_tailwind_css(css) as {
 					class_map?: Record<string, string>;
 					css_rules?: unknown;
 					css?: string;
 					changed?: boolean;
+					stats?: WasmAtomicStats;
 				};
+				const elapsedMs = performance.now() - started;
 
 				if (
 					typeof wasmResult?.css === "string" &&
@@ -1154,6 +1172,13 @@ function applyAtomicCss(css: string, from?: string) {
 						return {code: css, changed: false, mapChanged};
 					}
 					if (mapChanged) persistClassMap();
+					if (wasmResult.changed) {
+						recordCssTransform(
+							css,
+							wasmResult.css,
+							statsElapsedUs(wasmResult.stats, elapsedMs),
+						);
+					}
 					return {
 						code: formatAtomicCss(wasmResult.css),
 						changed: true,
@@ -1177,8 +1202,10 @@ function applyAtomicCss(css: string, from?: string) {
 		dedupeAtomicRules(root);
 		const mapChanged = classMapChangedSince(prev);
 		if (mapChanged) persistClassMap();
+		const atomicCss = root.toString();
+		recordCssTransform(css, atomicCss);
 		return {
-			code: formatAtomicCss(root.toString()),
+			code: formatAtomicCss(atomicCss),
 			changed: true,
 			mapChanged,
 		};

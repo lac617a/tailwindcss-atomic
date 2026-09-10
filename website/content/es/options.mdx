@@ -26,6 +26,11 @@ type Options = {
   classMapFile?: string | boolean;
   /** Entradas CSS/SCSS extra para el warmup (monorepos: `scss/styles.scss`). */
   cssEntries?: string[];
+  /**
+   * Imprime un reporte antes/después al terminar el build.
+   * `true` lo formatea; `"json"` emite una línea JSON.
+   */
+  report?: boolean | "json";
 };
 ```
 
@@ -40,6 +45,23 @@ withTailwindcssAtomic(nextConfig, {
   targetFunctions: new Set(["cn", "clsx", "tw"]),
 });
 ```
+
+## `report`
+
+Muestra lo que cambió el compiler en este build: bytes de CSS (crudo y gzip), utilities únicas vs hashes atómicos compartidos, y el tamaño de los class strings (los nombres hasheados suelen ser un poco más largos).
+
+```ts
+withTailwindcssAtomic(nextConfig, {report: true});
+```
+
+O sin tocar la config:
+
+```bash
+TAILWINDCSS_ATOMIC_REPORT=1 pnpm build
+TAILWINDCSS_ATOMIC_REPORT=json pnpm build
+```
+
+Los dev servers no imprimen para no ensuciar el HMR. En este repo, `pnpm report:apps` construye cada app de ejemplo con el reporte de texto.
 
 ## `transpilePackages`
 

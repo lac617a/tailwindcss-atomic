@@ -2,6 +2,18 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 #[derive(Serialize)]
+pub struct AtomicStatsResult {
+    pub input_bytes: usize,
+    pub output_bytes: usize,
+    pub utilities: usize,
+    pub atomic_rules: usize,
+    pub declarations: usize,
+    pub shared_hashes: usize,
+    pub elapsed_us: u64,
+    pub changed: bool,
+}
+
+#[derive(Serialize)]
 pub struct AtomicResult {
     /// Mapa de clase Tailwind -> lista de clases atómicas ("p-4" -> "_x1a _x2b")
     pub class_map: std::collections::HashMap<String, String>,
@@ -10,10 +22,24 @@ pub struct AtomicResult {
     /// Stylesheet completo tras atomicizar (preserva :root, @media, skins, :hover).
     pub css: String,
     pub changed: bool,
+    pub stats: AtomicStatsResult,
 }
 
 fn js_class_map(value: JsValue) -> std::collections::HashMap<String, String> {
     serde_wasm_bindgen::from_value(value).unwrap_or_default()
+}
+
+fn stats_result(stats: &tailwindcss_atomic::AtomicStats) -> AtomicStatsResult {
+    AtomicStatsResult {
+        input_bytes: stats.input_bytes,
+        output_bytes: stats.output_bytes,
+        utilities: stats.utilities,
+        atomic_rules: stats.atomic_rules,
+        declarations: stats.declarations,
+        shared_hashes: stats.shared_hashes,
+        elapsed_us: stats.elapsed_us,
+        changed: stats.changed,
+    }
 }
 
 #[wasm_bindgen]
@@ -26,6 +52,7 @@ pub fn process_tailwind_css(raw_css: &str) -> Result<JsValue, JsValue> {
         css_rules: output.css_rules,
         css: output.css,
         changed: output.changed,
+        stats: stats_result(&output.stats),
     };
 
     serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))

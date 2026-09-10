@@ -8,7 +8,7 @@ This crate is the engine behind [`tailwindcss-atomic`](https://www.npmjs.com/pac
 
 ```toml
 [dependencies]
-tailwindcss-atomic = "0.1"
+tailwindcss-atomic = "2.0"
 ```
 
 ```rust

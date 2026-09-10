@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/tailwindcss-atomic", "crates/tailwindcss-atomic-wasm"]
 
 [workspace.package]
-version = "0.1.1"
+version = "2.0.0"
 edition = "2024"
 license = "MIT"
 authors = ["lac617a <dominyel.r@gmail.com>"]

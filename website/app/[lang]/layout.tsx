@@ -41,7 +41,7 @@ const RootLayout: FC<LayoutProps> = async ({children, params}) => {
 	const pageMap = await getPageMap(`/${lang}`);
 
 	const banner = (
-		<Banner storageKey="atomic-v1">{dictionary.banner}</Banner>
+		<Banner storageKey="atomic-v2">{dictionary.banner}</Banner>
 	);
 
 	const navbar = (

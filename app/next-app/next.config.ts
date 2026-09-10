@@ -1,5 +1,5 @@
 import type {NextConfig} from "next";
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
 const nextConfig: NextConfig = {
 	reactStrictMode: true,
@@ -11,4 +11,4 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default withTailwindAtomic(nextConfig);
+export default withTailwindcssAtomic(nextConfig);

@@ -27,6 +27,6 @@ pnpm --filter next-app dev
 
 La config relevante:
 
-- `next.config.ts` — `withTailwindAtomic`
+- `next.config.ts` — `withTailwindcssAtomic`
 - `postcss.config.mjs` — `@tailwindcss/postcss` y después `tailwindcss-atomic/postcss`
 - `app/globals.css` — `@import "tailwindcss"`

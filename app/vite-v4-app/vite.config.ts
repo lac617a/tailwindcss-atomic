@@ -1,9 +1,9 @@
 import {defineConfig} from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindAtomic from "tailwindcss-atomic/vite";
+import tailwindcssAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
-	plugins: [react(), tailwindAtomic()],
+	plugins: [react(), tailwindcssAtomic()],
 	server: {
 		port: 3020,
 		strictPort: true,

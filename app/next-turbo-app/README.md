@@ -13,7 +13,7 @@ Desde la raíz:
 pnpm dev:turbo
 ```
 
-`withTailwindAtomic` configura:
+`withTailwindcssAtomic` configura:
 
 - **Webpack** (`webpack()`, por si corres `next dev` sin flag)
 - **Turbopack** (`turbopack.rules` con el loader en `*.tsx` / `*.ts` / `*.jsx` / `*.js` / `*.mjs` / `*.cjs`, con `condition: "foreign"` y `{ not: "foreign" }` para app + workspace)

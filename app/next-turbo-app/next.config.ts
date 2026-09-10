@@ -1,7 +1,7 @@
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import type {NextConfig} from "next";
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(appDir, "../..");
@@ -16,4 +16,4 @@ const nextConfig: NextConfig = {
 	},
 };
 
-export default withTailwindAtomic(nextConfig);
+export default withTailwindcssAtomic(nextConfig);

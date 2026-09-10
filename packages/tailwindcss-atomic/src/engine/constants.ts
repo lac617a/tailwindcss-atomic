@@ -31,7 +31,7 @@ type WebpackWatchingLike = {
 	invalidate?: () => void;
 };
 
-const ATOMIC_RUNTIME_KEY = "__tailwindAtomicRuntime__";
+const ATOMIC_RUNTIME_KEY = "__tailwindcssAtomicRuntime__";
 
 type IgnoreCssPattern = string | RegExp;
 type PreserveClassPattern = string | RegExp;

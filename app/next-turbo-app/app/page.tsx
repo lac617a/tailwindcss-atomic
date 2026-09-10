@@ -21,7 +21,7 @@ export default function HomePage() {
 						className estático
 					</h2>
 					<p className="text-sm leading-6 text-zinc-400">
-						PostCSS atomiciza el CSS. `withTailwindAtomic` registra el
+						PostCSS atomiciza el CSS. `withTailwindcssAtomic` registra el
 						loader también en `turbopack.rules`.
 					</p>
 				</article>

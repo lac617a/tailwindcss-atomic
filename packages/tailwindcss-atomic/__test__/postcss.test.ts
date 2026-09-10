@@ -1,7 +1,7 @@
 import postcss from "postcss";
 
 import {ATOMIC_RUNTIME} from "../src/engine/constants";
-import postcssTailwindAtomic from "../src/adapters/postcss";
+import postcssTailwindcssAtomic from "../src/adapters/postcss";
 
 const SLICK_CSS = `
 .slick-slider { position: relative; display: block; box-sizing: border-box; }
@@ -26,12 +26,12 @@ const NEXI_MODULE_CSS = `
 
 describe("postcss plugin", () => {
 	it("declares itself as a PostCSS plugin", () => {
-		expect(postcssTailwindAtomic.postcss).toBe(true);
-		expect(postcssTailwindAtomic().postcssPlugin).toBe("postcss-tailwind-atomic");
+		expect(postcssTailwindcssAtomic.postcss).toBe(true);
+		expect(postcssTailwindcssAtomic().postcssPlugin).toBe("postcss-tailwind-atomic");
 	});
 
 	it("replaces utility CSS with atomic rules", async () => {
-		const result = await postcss([postcssTailwindAtomic()]).process(
+		const result = await postcss([postcssTailwindcssAtomic()]).process(
 			".flex { display: flex }",
 			{from: undefined},
 		);
@@ -42,7 +42,7 @@ describe("postcss plugin", () => {
 
 	it("honors preserveClasses for Tailwind-shaped custom names", async () => {
 		const result = await postcss([
-			postcssTailwindAtomic({preserveClasses: ["text-logo"]}),
+			postcssTailwindcssAtomic({preserveClasses: ["text-logo"]}),
 		]).process(".text-logo { color: #111 } .flex { display: flex }", {
 			from: "src/app.css",
 		});
@@ -54,7 +54,7 @@ describe("postcss plugin", () => {
 
 	it("leaves CSS without utilities unchanged", async () => {
 		const css = ":root { color: red }";
-		const result = await postcss([postcssTailwindAtomic()]).process(css, {
+		const result = await postcss([postcssTailwindcssAtomic()]).process(css, {
 			from: undefined,
 		});
 		expect(result.css).toContain(":root");
@@ -70,14 +70,14 @@ describe("postcss plugin", () => {
 			},
 		};
 
-		await postcss([postcssTailwindAtomic()]).process(".p-6 { padding: 1.5rem }", {
+		await postcss([postcssTailwindcssAtomic()]).process(".p-6 { padding: 1.5rem }", {
 			from: undefined,
 		});
 		expect(invalidateModule).toHaveBeenCalled();
 	});
 
 	it("does not atomicize slick-carousel CSS from node_modules", async () => {
-		const posix = await postcss([postcssTailwindAtomic()]).process(SLICK_CSS, {
+		const posix = await postcss([postcssTailwindcssAtomic()]).process(SLICK_CSS, {
 			from: "/repo/node_modules/slick-carousel/slick/slick.css",
 		});
 		expect(posix.css).toContain(".slick-slider");
@@ -88,13 +88,13 @@ describe("postcss plugin", () => {
 		expect(posix.css).not.toMatch(/\._[0-9a-f]{6}/);
 		expect(ATOMIC_RUNTIME.classMap["slick-slide"]).toBeUndefined();
 
-		const win = await postcss([postcssTailwindAtomic()]).process(SLICK_CSS, {
+		const win = await postcss([postcssTailwindcssAtomic()]).process(SLICK_CSS, {
 			from: "D:\\repo\\node_modules\\slick-carousel\\slick\\slick-theme.css",
 		});
 		expect(win.css).toContain(".slick-slider");
 		expect(win.css).not.toContain("/*! tailwind-atomic */");
 
-		const app = await postcss([postcssTailwindAtomic()]).process(
+		const app = await postcss([postcssTailwindcssAtomic()]).process(
 			".flex { display: flex } .p-4 { padding: 1rem }",
 			{from: "src/app/globals.css"},
 		);
@@ -105,7 +105,7 @@ describe("postcss plugin", () => {
 	});
 
 	it("atomicizes Tailwind utilities inside CSS modules without eating locals", async () => {
-		const result = await postcss([postcssTailwindAtomic()]).process(
+		const result = await postcss([postcssTailwindcssAtomic()]).process(
 			`${NEXI_MODULE_CSS}\n.flex { display: flex }\n.p-4 { padding: 1rem }\n`,
 			{from: "D:\\repo\\app\\components\\nexi.module.css"},
 		);
@@ -120,7 +120,7 @@ describe("postcss plugin", () => {
 		expect(result.css).not.toContain(".flex {");
 		expect(result.css).not.toContain(".p-4 {");
 
-		const localsOnly = await postcss([postcssTailwindAtomic()]).process(
+		const localsOnly = await postcss([postcssTailwindcssAtomic()]).process(
 			NEXI_MODULE_CSS,
 			{from: "/repo/app/components/nexi.module.scss?raw"},
 		);

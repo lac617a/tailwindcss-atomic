@@ -16,7 +16,7 @@ function createPlugin() {
 	};
 }
 
-describe("tailwindAtomicAstro", () => {
+describe("tailwindcssAtomicAstro", () => {
 	it("injects the Vite CSS + JS plugins through astro:config:setup", () => {
 		const integration = astro();
 		expect(integration.name).toBe("tailwindcss-atomic");

@@ -38,7 +38,7 @@ vi.mock("../src/engine/wasm", async (importOriginal) => {
 if (!fs.existsSync(loaderStubPath)) {
 	fs.writeFileSync(
 		loaderStubPath,
-		`"use strict";\nmodule.exports = function tailwindAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
+		`"use strict";\nmodule.exports = function tailwindcssAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
 	);
 }
 
@@ -62,7 +62,7 @@ beforeEach(() => {
 	if (!fs.existsSync(loaderStubPath)) {
 		fs.writeFileSync(
 			loaderStubPath,
-			`"use strict";\nmodule.exports = function tailwindAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
+			`"use strict";\nmodule.exports = function tailwindcssAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
 		);
 	}
 });

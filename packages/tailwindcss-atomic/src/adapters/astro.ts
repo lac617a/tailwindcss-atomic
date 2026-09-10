@@ -1,4 +1,4 @@
-import tailwindAtomicVite from "./vite";
+import tailwindcssAtomicVite from "./vite";
 import type {UnpluginFactoryOptions} from "../types";
 
 type AstroConfigSetupCtx = {
@@ -9,7 +9,7 @@ type AstroConfigSetupCtx = {
  * Integración de Astro: inyecta el plugin de Vite (CSS pre + rewrite de JS/HTML).
  * Tailwind v4 sigue yendo aparte con `@tailwindcss/vite`.
  */
-export default function tailwindAtomicAstro(
+export default function tailwindcssAtomicAstro(
 	options?: UnpluginFactoryOptions,
 ) {
 	return {
@@ -18,7 +18,7 @@ export default function tailwindAtomicAstro(
 			"astro:config:setup"(ctx: AstroConfigSetupCtx) {
 				ctx.updateConfig({
 					vite: {
-						plugins: tailwindAtomicVite(options),
+						plugins: tailwindcssAtomicVite(options),
 					},
 				});
 			},

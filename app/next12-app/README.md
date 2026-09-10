@@ -15,7 +15,7 @@ pnpm turbo dev --filter=next12-app
 
 Config:
 
-- `next.config.mjs` — `withTailwindAtomic` (no App Router; Next 12 no tiene Turbopack)
+- `next.config.mjs` — `withTailwindcssAtomic` (no App Router; Next 12 no tiene Turbopack)
 - `postcss.config.js` — `tailwindcss`, `autoprefixer`, `tailwindcss-atomic/postcss`
 - `styles/globals.css` — `@tailwind base/components/utilities`
 

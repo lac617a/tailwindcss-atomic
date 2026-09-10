@@ -17,7 +17,7 @@ type PostcssAtomicOptions = {
  * y las parte en clases atómicas `_xxxxxx`.
  * CSS de `node_modules` (slick, etc.) se deja intacto.
  */
-export default function postcssTailwindAtomic(options: PostcssAtomicOptions = {}) {
+export default function postcssTailwindcssAtomic(options: PostcssAtomicOptions = {}) {
 	if (options.ignoreCss?.length) {
 		ATOMIC_RUNTIME.ignoreCss.push(...options.ignoreCss);
 	}
@@ -47,4 +47,4 @@ export default function postcssTailwindAtomic(options: PostcssAtomicOptions = {}
 	};
 }
 
-postcssTailwindAtomic.postcss = true;
+postcssTailwindcssAtomic.postcss = true;

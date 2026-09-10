@@ -26,7 +26,7 @@ function watchClassMap(loader: LoaderContext<{resourcePath: string}>) {
 	loader.addMissingDependency?.(mapFile);
 }
 
-async function tailwindAtomicWebpackLoader(
+async function tailwindcssAtomicWebpackLoader(
 	this: LoaderContext<{resourcePath: string}>,
 	source: string,
 ) {
@@ -42,4 +42,4 @@ async function tailwindAtomicWebpackLoader(
 	callback(null, code != null ? code : source);
 }
 
-export default tailwindAtomicWebpackLoader;
+export default tailwindcssAtomicWebpackLoader;

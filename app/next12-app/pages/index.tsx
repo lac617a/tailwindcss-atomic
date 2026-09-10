@@ -29,7 +29,7 @@ export default function HomePage() {
 							className estático
 						</h2>
 						<p className="text-sm leading-6 text-zinc-400">
-							`withTailwindAtomic` inyecta el loader y el plugin de
+							`withTailwindcssAtomic` inyecta el loader y el plugin de
 							Webpack.
 						</p>
 					</article>

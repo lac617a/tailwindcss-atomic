@@ -21,11 +21,11 @@ Verified fixtures live under `app/` in the repo.
 
 ```ts
 // next.config.ts
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
 const nextConfig = {reactStrictMode: true};
 
-export default withTailwindAtomic(nextConfig);
+export default withTailwindcssAtomic(nextConfig);
 ```
 
 Keep PostCSS with `@tailwindcss/postcss` **then** `tailwindcss-atomic/postcss`.
@@ -62,12 +62,12 @@ module.exports = {
 
 ```ts
 // next.config.ts
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
-export default withTailwindAtomic({reactStrictMode: true});
+export default withTailwindcssAtomic({reactStrictMode: true});
 ```
 
-`withTailwindAtomic` injects the Webpack loader (pre) and the plugin that, in `processAssets`, atomicizes **all** CSS and then rewrites **all** JS (including server chunks). In `next dev` it invalidates JS modules when the map changes.
+`withTailwindcssAtomic` injects the Webpack loader (pre) and the plugin that, in `processAssets`, atomicizes **all** CSS and then rewrites **all** JS (including server chunks). In `next dev` it invalidates JS modules when the map changes.
 
 The classic path `app/globals.css` with `@tailwind base/components/utilities` still works the same.
 
@@ -75,9 +75,9 @@ The classic path `app/globals.css` with `@tailwind base/components/utilities` st
 
 ```ts
 // next.config.ts
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
-export default withTailwindAtomic({
+export default withTailwindcssAtomic({
   reactStrictMode: true,
 });
 ```
@@ -86,7 +86,7 @@ export default withTailwindAtomic({
 { "scripts": { "dev": "next dev --turbopack --port 3019" } }
 ```
 
-`withTailwindAtomic` fills `turbopack.rules` with the TS/JS loader (plus the Webpack hook). In Next 16.3+ rules are an array with `condition: "foreign"` and `condition: { not: "foreign" }`; the `{ foreign, default }` shorthand no longer validates. Tailwind 4 PostCSS is still required.
+`withTailwindcssAtomic` fills `turbopack.rules` with the TS/JS loader (plus the Webpack hook). In Next 16.3+ rules are an array with `condition: "foreign"` and `condition: { not: "foreign" }`; the `{ foreign, default }` shorthand no longer validates. Tailwind 4 PostCSS is still required.
 
 ## Turborepo / monorepo (Next + Turbopack)
 
@@ -94,7 +94,7 @@ A mixed className (`flex … hover:bg-revamp-… _cafc46 _ffc2a9`) means **CSS w
 
 That happens when `cva()` / `cn()` lives in a design system outside the app (`packages/ui`, `node_modules/ui-latamwin`) and Turbopack rules only touched `apps/webs/latamwin`.
 
-`withTailwindAtomic` now:
+`withTailwindcssAtomic` now:
 
 1. Puts the loader in **`turbopack.rules`** for `*.ts(x)`, `*.js(x)`, `*.mjs`, and `*.cjs` as an array of two rules: `condition: "foreign"` (node_modules / workspace) and `condition: { not: "foreign" }` (app code). The loader is a no-op on `react` / `next`; it does rewrite `transpilePackages` and workspace junctions.
 2. Sets `turbopack.root` and `outputFileTracingRoot` to the monorepo root (`turbo.json` / `pnpm-workspace.yaml`) if you did not set them.
@@ -103,14 +103,14 @@ That happens when `cva()` / `cn()` lives in a design system outside the app (`pa
 
 ```ts
 // apps/webs/latamwin/next.config.ts
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["ui-latamwin"],
 };
 
-export default withTailwindAtomic(nextConfig, {
+export default withTailwindcssAtomic(nextConfig, {
   cssEntries: ["scss/styles.scss"],
 });
 ```
@@ -119,7 +119,7 @@ export default withTailwindAtomic(nextConfig, {
   If a UI package is published as `dist/*.js` and is not in `transpilePackages`, its `flex` / `bg-*` strings reach the DOM untouched and mix with the app hashes. Add it to `transpilePackages` or import source (`exports` → `src`).
 </Callout>
 
-Do **not** hash that UI `dist` in Rollup (`preserveModules` should keep original utilities). Do **not** pass `{ library: true }` to `withTailwindAtomic` in the Next app — that option is only for the design-system Rollup build, and the Next adapter ignores it.
+Do **not** hash that UI `dist` in Rollup (`preserveModules` should keep original utilities). Do **not** pass `{ library: true }` to `withTailwindcssAtomic` in the Next app — that option is only for the design-system Rollup build, and the Next adapter ignores it.
 
 If `bg-opacity-50` is in the DOM but there is no `background-color`, `twMerge` v3 dropped `bg-neutral-300`. Use `bg-neutral-300/50`. See [Preserve & runtime](./preserve).
 
@@ -127,9 +127,9 @@ If `bg-opacity-50` is in the DOM but there is no `background-color`, `twMerge` v
 
 ```js
 // next.config.mjs
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
-export default withTailwindAtomic({
+export default withTailwindcssAtomic({
   reactStrictMode: true,
 });
 ```
@@ -147,10 +147,10 @@ The recommended path with Vite is `@tailwindcss/vite`. You do **not** need `@tai
 import {defineConfig} from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import tailwindAtomic from "tailwindcss-atomic/vite";
+import tailwindcssAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), tailwindAtomic()],
+  plugins: [react(), tailwindcss(), tailwindcssAtomic()],
 });
 ```
 
@@ -170,10 +170,10 @@ export default {
 // vite.config.ts
 import {defineConfig} from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindAtomic from "tailwindcss-atomic/vite";
+import tailwindcssAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindAtomic()],
+  plugins: [react(), tailwindcssAtomic()],
 });
 ```
 
@@ -182,10 +182,10 @@ export default defineConfig({
 ```ts
 import {defineConfig} from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindAtomic from "tailwindcss-atomic/vite";
+import tailwindcssAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindAtomic()],
+  plugins: [react(), tailwindcssAtomic()],
 });
 ```
 
@@ -199,10 +199,10 @@ Astro uses Vite. Tailwind v4 goes with `@tailwindcss/vite` (not `@astrojs/tailwi
 // astro.config.ts
 import {defineConfig} from "astro/config";
 import tailwindcss from "@tailwindcss/vite";
-import tailwindAtomic from "tailwindcss-atomic/astro";
+import tailwindcssAtomic from "tailwindcss-atomic/astro";
 
 export default defineConfig({
-  integrations: [tailwindAtomic()],
+  integrations: [tailwindcssAtomic()],
   vite: {
     plugins: [tailwindcss()],
   },
@@ -219,11 +219,11 @@ import "../styles/global.css";
 If you prefer not to use the integration, the Vite plugin does the same:
 
 ```ts
-import tailwindAtomic from "tailwindcss-atomic/vite";
+import tailwindcssAtomic from "tailwindcss-atomic/vite";
 
 export default defineConfig({
   vite: {
-    plugins: [tailwindcss(), tailwindAtomic()],
+    plugins: [tailwindcss(), tailwindcssAtomic()],
   },
 });
 ```
@@ -231,20 +231,20 @@ export default defineConfig({
 ## Webpack
 
 ```js
-const tailwindAtomic = require("tailwindcss-atomic/webpack");
+const tailwindcssAtomic = require("tailwindcss-atomic/webpack");
 
 module.exports = {
-  plugins: [tailwindAtomic()],
+  plugins: [tailwindcssAtomic()],
 };
 ```
 
 ## Rollup
 
 ```js
-import tailwindAtomic from "tailwindcss-atomic/rollup";
+import tailwindcssAtomic from "tailwindcss-atomic/rollup";
 
 export default {
-  plugins: [tailwindAtomic()],
+  plugins: [tailwindcssAtomic()],
 };
 ```
 
@@ -252,12 +252,12 @@ export default {
 
 ```js
 import {build} from "esbuild";
-import tailwindAtomic from "tailwindcss-atomic/esbuild";
+import tailwindcssAtomic from "tailwindcss-atomic/esbuild";
 
 await build({
   entryPoints: ["src/main.ts"],
   bundle: true,
   outfile: "dist/index.js",
-  plugins: [tailwindAtomic()],
+  plugins: [tailwindcssAtomic()],
 });
 ```

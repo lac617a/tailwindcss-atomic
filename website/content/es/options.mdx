@@ -6,7 +6,7 @@ import {Callout} from "nextra/components";
 
 # Opciones
 
-Pasa un segundo argumento a `withTailwindAtomic`, o el mismo objeto a los plugins de Vite / Webpack / Rollup / esbuild / Astro.
+Pasa un segundo argumento a `withTailwindcssAtomic`, o el mismo objeto a los plugins de Vite / Webpack / Rollup / esbuild / Astro.
 
 ```ts
 type Options = {
@@ -36,7 +36,7 @@ type Options = {
 - `classMapFile`: `node_modules/.cache/tailwindcss-atomic/class-map.json`
 
 ```ts
-withTailwindAtomic(nextConfig, {
+withTailwindcssAtomic(nextConfig, {
   targetFunctions: new Set(["cn", "clsx", "tw"]),
 });
 ```
@@ -50,7 +50,7 @@ withTailwindAtomic(nextConfig, {
 Fuerza el warmup de ficheros SCSS/CSS que no son la primera hoja que descubre Next. Típico en monorepos:
 
 ```ts
-export default withTailwindAtomic(nextConfig, {
+export default withTailwindcssAtomic(nextConfig, {
   cssEntries: ["scss/styles.scss"],
 });
 ```
@@ -60,7 +60,7 @@ export default withTailwindAtomic(nextConfig, {
 Ruta personalizada, o `false` para no escribir el inventario.
 
 ```ts
-tailwindAtomic({
+tailwindcssAtomic({
   classMapFile: ".cache/atomic-class-map.json",
 });
 ```
@@ -74,7 +74,7 @@ Salta la atomicización de CSS extra además de `node_modules` (hojas de tercero
 Deja literales nombres que *parecen* utilidades Tailwind (`text-logo`, `flex-container`). Los strings coinciden exactos; las regex prueban el nombre sin escapar.
 
 ```ts
-withTailwindAtomic(nextConfig, {
+withTailwindcssAtomic(nextConfig, {
   preserveClasses: ["text-logo", /^flex-container$/],
 });
 ```

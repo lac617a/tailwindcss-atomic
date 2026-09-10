@@ -6,7 +6,7 @@ import {Callout} from "nextra/components";
 
 # Options
 
-Pass a second argument to `withTailwindAtomic`, or the same object to Vite / Webpack / Rollup / esbuild / Astro plugins.
+Pass a second argument to `withTailwindcssAtomic`, or the same object to Vite / Webpack / Rollup / esbuild / Astro plugins.
 
 ```ts
 type Options = {
@@ -36,7 +36,7 @@ type Options = {
 - `classMapFile`: `node_modules/.cache/tailwindcss-atomic/class-map.json`
 
 ```ts
-withTailwindAtomic(nextConfig, {
+withTailwindcssAtomic(nextConfig, {
   targetFunctions: new Set(["cn", "clsx", "tw"]),
 });
 ```
@@ -50,7 +50,7 @@ Use this when class strings live in a workspace UI package or in `node_modules`.
 Force warmup of SCSS/CSS files that are not the first stylesheet Next discovers. Typical in monorepos:
 
 ```ts
-export default withTailwindAtomic(nextConfig, {
+export default withTailwindcssAtomic(nextConfig, {
   cssEntries: ["scss/styles.scss"],
 });
 ```
@@ -60,7 +60,7 @@ export default withTailwindAtomic(nextConfig, {
 Set a custom path, or `false` to skip writing the inventory.
 
 ```ts
-tailwindAtomic({
+tailwindcssAtomic({
   classMapFile: ".cache/atomic-class-map.json",
 });
 ```
@@ -74,7 +74,7 @@ Skip atomicizing extra CSS besides `node_modules` (third-party sheets you import
 Leave class names that *look* like Tailwind utilities (`text-logo`, `flex-container`) as literals. Strings match exactly; regexes test the unescaped name.
 
 ```ts
-withTailwindAtomic(nextConfig, {
+withTailwindcssAtomic(nextConfig, {
   preserveClasses: ["text-logo", /^flex-container$/],
 });
 ```

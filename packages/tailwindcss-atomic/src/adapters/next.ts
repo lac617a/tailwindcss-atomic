@@ -4,7 +4,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import type {Configuration} from "webpack";
 
-import webpackTailwindAtomic from "./webpack";
+import webpackTailwindcssAtomic from "./webpack";
 import {ATOMIC_RUNTIME} from "../engine/constants";
 import {shouldSkipJsTransform} from "../engine/js";
 import {
@@ -31,7 +31,7 @@ import {
 
 const req = createRequire(import.meta.url);
 
-type AtomicNextOptions = Parameters<typeof webpackTailwindAtomic>[0] &
+type AtomicNextOptions = Parameters<typeof webpackTailwindcssAtomic>[0] &
 	UnpluginFactoryOptions;
 
 function resolveAtomicLoader() {
@@ -157,7 +157,7 @@ function callUserWebpack(
 	return (webpackHook as NextWebpackHook)(config, webpackOptions) ?? config;
 }
 
-export function withTailwindAtomic<T extends object = NextConfigFields>(
+export function withTailwindcssAtomic<T extends object = NextConfigFields>(
 	nextConfig: T = {} as T,
 	options: AtomicNextOptions = {},
 ): AtomicNextConfig<T> {
@@ -213,7 +213,7 @@ export function withTailwindAtomic<T extends object = NextConfigFields>(
 
 			webpackConfig.plugins ??= [];
 			webpackConfig.plugins.push(
-				webpackTailwindAtomic({
+				webpackTailwindcssAtomic({
 					...atomicOptions,
 					transpilePackages,
 				}),

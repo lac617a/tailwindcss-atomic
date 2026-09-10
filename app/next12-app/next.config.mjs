@@ -1,4 +1,4 @@
-import {withTailwindAtomic} from "tailwindcss-atomic/next";
+import {withTailwindcssAtomic} from "tailwindcss-atomic/next";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -11,4 +11,4 @@ const nextConfig = {
 	},
 };
 
-export default withTailwindAtomic(nextConfig);
+export default withTailwindcssAtomic(nextConfig);

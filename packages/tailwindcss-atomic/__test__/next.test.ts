@@ -1,6 +1,6 @@
 import type {Configuration} from "webpack";
 
-import {withTailwindAtomic} from "../src/adapters/next";
+import {withTailwindcssAtomic} from "../src/adapters/next";
 import {ATOMIC_RUNTIME} from "../src/engine/constants";
 
 const readInstalledNextVersion = vi.hoisted(() =>
@@ -43,13 +43,13 @@ function expectModernTurboRules(rules: Record<string, unknown>) {
 	}
 }
 
-describe("withTailwindAtomic", () => {
+describe("withTailwindcssAtomic", () => {
 	beforeEach(() => {
 		readInstalledNextVersion.mockReturnValue(undefined);
 	});
 
 	it("injects turbopack loader rules for app and workspace files", () => {
-		const config = withTailwindAtomic();
+		const config = withTailwindcssAtomic();
 		const rules = config.turbopack?.rules ?? {};
 		expectModernTurboRules(rules);
 		expect(config.turbopack?.root).toBeTruthy();
@@ -66,25 +66,25 @@ describe("withTailwindAtomic", () => {
 		expect(/(?:^|[\\/])_virtual_/.test("/tmp/app/_virtual_%00x")).toBe(true);
 
 		readInstalledNextVersion.mockReturnValue("16.3.0");
-		const config = withTailwindAtomic();
+		const config = withTailwindcssAtomic();
 		expectModernTurboRules(config.turbopack?.rules ?? {});
 	});
 
 	it("uses condition arrays on Next 16+ instead of nested foreign/default keys", () => {
 		readInstalledNextVersion.mockReturnValue("16.3.0");
-		const config = withTailwindAtomic();
+		const config = withTailwindcssAtomic();
 		expectModernTurboRules(config.turbopack?.rules ?? {});
 	});
 
 	it("uses condition arrays on Next 15.5+", () => {
 		readInstalledNextVersion.mockReturnValue("15.5.0");
-		const config = withTailwindAtomic();
+		const config = withTailwindcssAtomic();
 		expectModernTurboRules(config.turbopack?.rules ?? {});
 	});
 
 	it("emits nested foreign/default rules on Next 15.2 and earlier", () => {
 		readInstalledNextVersion.mockReturnValue("15.2.4");
-		const config = withTailwindAtomic();
+		const config = withTailwindcssAtomic();
 		const rules = config.turbopack?.rules ?? {};
 		expect(rules["*.tsx"]).toEqual({
 			foreign: loaderRule,
@@ -100,7 +100,7 @@ describe("withTailwindAtomic", () => {
 
 	it("keeps user turbopack rules and calls the original webpack hook", () => {
 		const webpack = vi.fn((cfg: Configuration) => cfg);
-		const config = withTailwindAtomic({
+		const config = withTailwindcssAtomic({
 			turbopack: {
 				root: "/tmp/app",
 				rules: {
@@ -181,7 +181,7 @@ describe("withTailwindAtomic", () => {
 				resolveExtensions: [".tsx", ".ts"],
 			},
 		};
-		const wrapped = withTailwindAtomic(nextConfig);
+		const wrapped = withTailwindcssAtomic(nextConfig);
 		expect(wrapped.reactCompiler).toBe(true);
 		expect(wrapped.turbopack.root).toBe("/tmp/app");
 		expect(typeof wrapped.webpack).toBe("function");
@@ -192,7 +192,7 @@ describe("withTailwindAtomic", () => {
 
 	it("falls back to the webpack config when the user hook returns null", () => {
 		const webpack = vi.fn(() => null);
-		const config = withTailwindAtomic({webpack});
+		const config = withTailwindcssAtomic({webpack});
 		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
 		const result = config.webpack(webpackConfig, {dev: false});
 		expect(webpack).toHaveBeenCalledWith(webpackConfig, {dev: false});
@@ -200,7 +200,7 @@ describe("withTailwindAtomic", () => {
 	});
 
 	it("allows transpilePackages from Next config through the webpack exclude", () => {
-		const config = withTailwindAtomic({
+		const config = withTailwindcssAtomic({
 			transpilePackages: ["ui-latamwin"],
 		});
 		const webpackConfig: Configuration = {plugins: [], module: {rules: []}};
@@ -215,7 +215,7 @@ describe("withTailwindAtomic", () => {
 	});
 
 	it("records cssEntries and keeps an explicit turbopack root", () => {
-		const config = withTailwindAtomic(
+		const config = withTailwindcssAtomic(
 			{turbopack: {root: "/tmp/app"}},
 			{cssEntries: ["scss/styles.scss"]},
 		);
@@ -225,13 +225,13 @@ describe("withTailwindAtomic", () => {
 	});
 
 	it("records preserveClasses", () => {
-		withTailwindAtomic({}, {preserveClasses: ["text-logo"]});
+		withTailwindcssAtomic({}, {preserveClasses: ["text-logo"]});
 		expect(ATOMIC_RUNTIME.preserveClasses).toContain("text-logo");
 	});
 
 	it("ignores library: true so a Next app still hashes classNames", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const config = withTailwindAtomic({}, {library: true});
+		const config = withTailwindcssAtomic({}, {library: true});
 		expect(warn).toHaveBeenCalledWith(
 			expect.stringContaining("`library: true` is for Rollup UI packages"),
 		);
@@ -267,7 +267,7 @@ describe("withTailwindAtomic", () => {
 
 		try {
 			vi.resetModules();
-			const {withTailwindAtomic: fresh} = await import("../src/adapters/next");
+			const {withTailwindcssAtomic: fresh} = await import("../src/adapters/next");
 			const config = fresh();
 			const tsx = config.turbopack?.rules?.["*.tsx"] as Array<{
 				loaders?: string[];
@@ -278,7 +278,7 @@ describe("withTailwindAtomic", () => {
 		} finally {
 			fs.writeFileSync(
 				sourceLoader,
-				`"use strict";\nmodule.exports = function tailwindAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
+				`"use strict";\nmodule.exports = function tailwindcssAtomicWebpackLoader(source) {\n\treturn source;\n};\n`,
 			);
 		}
 	});
